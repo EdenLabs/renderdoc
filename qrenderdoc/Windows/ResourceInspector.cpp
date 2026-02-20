@@ -74,7 +74,7 @@ public:
   Qt::ItemFlags flags(const QModelIndex &index) const override
   {
     if(!index.isValid())
-      return 0;
+      return Qt::NoItemFlags;
 
     return QAbstractItemModel::flags(index);
   }
@@ -96,7 +96,7 @@ public:
           return QVariant::fromValue(desc.resourceId);
 
         if(role == FilterRole)
-          return ToQStr(desc.type) + lit(" ") + m_Ctx.GetResourceName(desc.resourceId);
+          return ToQStr(desc.type) + lit(" ") + QString(m_Ctx.GetResourceName(desc.resourceId));
 
         if(role == LastAccessSortRole)
           return m_LastUse[desc.resourceId];
@@ -464,7 +464,7 @@ void ResourceInspector::RevealParameter(SDObject *param)
         if(current->GetChild(i) == next)
         {
           current = next;
-          item = parent.child((int)i, 0);
+          item = parent.model()->index((int)i, 0, parent);
           break;
         }
       }
@@ -746,7 +746,7 @@ void ResourceInspector::resourceUsage_contextMenu(const QPoint &pos)
   RDDialog::show(&contextMenu, ui->resourceUsage->viewport()->mapToGlobal(pos));
 }
 
-void ResourceInspector::enterEvent(QEvent *event)
+void ResourceInspector::enterEvent(QEnterEvent *event)
 {
   HighlightUsage();
 }

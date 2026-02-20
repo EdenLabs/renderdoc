@@ -27,7 +27,7 @@
 #include "ILexer.h"
 #include "Lexilla.h"
 #include "SciLexer.h"
-#include "scintilla/include/qt/ScintillaEdit.h"
+#include "ScintillaEdit.h"
 
 static const char *python_keywords =
     "False None True and as assert break class continue def del elif else except finally for from "

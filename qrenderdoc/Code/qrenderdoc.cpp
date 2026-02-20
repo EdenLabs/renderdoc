@@ -171,9 +171,8 @@ void hideOption(QCommandLineOption &opt)
 
 int main(int argc, char *argv[])
 {
-  // call this as the very first thing - no-op on other platforms, but on linux it means
-  // XInitThreads will be called allowing driver access to xlib on multiple threads.
-  QCoreApplication::setAttribute(Qt::AA_X11InitThreads);
+  // Qt6 removed AA_X11InitThreads — XInitThreads is called
+  // automatically when needed.
 
   qInstallMessageHandler(sharedLogOutput);
 

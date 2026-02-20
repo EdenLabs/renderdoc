@@ -61,7 +61,7 @@ int BreadcrumbsLayout::count() const
 
 Qt::Orientations BreadcrumbsLayout::expandingDirections() const
 {
-  return 0;
+  return {};
 }
 
 QSize BreadcrumbsLayout::minimumSize() const
@@ -217,7 +217,7 @@ MarkerBreadcrumbs::MarkerBreadcrumbs(ICaptureContext &ctx, IEventBrowser *browse
 
   m_Layout = new BreadcrumbsLayout(this, m_ElidedItems);
   m_Layout->setContentsMargins(QMargins(0, 2, 0, 2));
-  m_Layout->setMargin(0);
+  m_Layout->setContentsMargins(0, 0, 0, 0);
   setLayout(m_Layout);
 
   m_ElidedMenu = new QMenu(this);

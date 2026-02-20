@@ -851,7 +851,7 @@ void VirtualFileDialog::on_filename_keyPress(QKeyEvent *e)
     fileNotFound(text);
   }
 
-  m_FileProxy->setFilterRegExp(re);
+  m_FileProxy->setFilterRegularExpression(re);
   m_FileProxy->refresh();
 }
 
@@ -872,7 +872,8 @@ void VirtualFileDialog::on_buttonBox_accepted()
   }
 
   // simulate enter being pressed
-  QKeyEvent fakeEvent(QEvent::KeyPress, Qt::Key_Return, 0);
+  QKeyEvent fakeEvent(
+      QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier);
   on_filename_keyPress(&fakeEvent);
 }
 

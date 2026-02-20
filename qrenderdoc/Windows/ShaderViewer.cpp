@@ -40,8 +40,8 @@
 #include "Code/ScintillaSyntax.h"
 #include "Widgets/Extended/RDLabel.h"
 #include "Widgets/FindReplace.h"
-#include "scintilla/include/SciLexer.h"
-#include "scintilla/include/qt/ScintillaEdit.h"
+#include "SciLexer.h"
+#include "ScintillaEdit.h"
 #include "toolwindowmanager/ToolWindowManager.h"
 #include "toolwindowmanager/ToolWindowManagerArea.h"
 #include "ui_ShaderViewer.h"
@@ -308,7 +308,7 @@ ShaderViewer::ShaderViewer(ICaptureContext &ctx, QWidget *parent)
 
     QVBoxLayout *framelayout = new QVBoxLayout(m_DisassemblyFrame);
     framelayout->setSpacing(0);
-    framelayout->setMargin(0);
+    framelayout->setContentsMargins(0, 0, 0, 0);
     framelayout->addWidget(m_DisassemblyToolbar);
     framelayout->addWidget(m_DisassemblyView);
 

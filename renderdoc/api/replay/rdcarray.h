@@ -841,29 +841,7 @@ public:
     return *this;
   }
 
-  rdcarray(const QVector<T> &in)
-  {
-    elems = NULL;
-    allocatedCount = usedCount = 0;
-    assign(in);
-  }
-  inline void assign(const QVector<T> &in) { *this = in; }
-  rdcarray &operator=(const QVector<T> &in)
-  {
-    // make sure we have enough space, allocating more if needed
-    reserve(in.size());
-    // destruct the old objects
-    clear();
-
-    // update new size
-    setUsedCount(in.count());
-
-    // copy construct the new elems
-    for(size_t i = 0; i < usedCount; i++)
-      new(elems + i) T(in[(int32_t)i]);
-
-    return *this;
-  }
+  // In Qt6, QVector is a typedef for QList — no separate overloads needed.
 #endif
 };
 

@@ -476,6 +476,8 @@ TextureViewer::TextureViewer(ICaptureContext &ctx, QWidget *parent)
 {
   ui->setupUi(this);
 
+  m_CustomShaderTimer.start();
+
   ui->render->SetContext(m_Ctx);
   ui->pixelContext->SetContext(m_Ctx);
 
@@ -705,7 +707,7 @@ TextureViewer::~TextureViewer()
   delete ui;
 }
 
-void TextureViewer::enterEvent(QEvent *event)
+void TextureViewer::enterEvent(QEnterEvent *event)
 {
   HighlightUsage();
 }
@@ -984,7 +986,7 @@ void TextureViewer::UI_UpdateStatusText()
   {
     QPalette Pal(palette());
 
-    Pal.setColor(QPalette::Background, swatchColor);
+    Pal.setColor(QPalette::Window, swatchColor);
 
     ui->pickSwatch->setAutoFillBackground(true);
     ui->pickSwatch->setPalette(Pal);
@@ -2363,7 +2365,9 @@ void TextureViewer::OpenResourceContextMenu(ResourceId id, bool input,
 
   if(m_Ctx.CurPipelineState().SupportsBarriers())
   {
-    imageLayout.setText(tr("Image is in layout ") + m_Ctx.CurPipelineState().GetResourceLayout(id));
+    imageLayout.setText(
+        tr("Image is in layout ") +
+        QString(m_Ctx.CurPipelineState().GetResourceLayout(id)));
     contextMenu.addAction(&imageLayout);
     contextMenu.addSeparator();
   }
@@ -2421,7 +2425,7 @@ void TextureViewer::InitResourcePreview(ResourcePreview *prev, Descriptor res, b
     {
       if(!fullname.isEmpty())
         fullname += lit(" = ");
-      fullname += m_Ctx.GetResourceName(res.resource);
+      fullname += QString(m_Ctx.GetResourceName(res.resource));
     }
     if(fullname.isEmpty())
       fullname = m_Ctx.GetResourceName(res.resource);
@@ -2634,13 +2638,13 @@ void TextureViewer::thumb_clicked(QMouseEvent *e)
 
 void TextureViewer::render_mouseWheel(QWheelEvent *e)
 {
-  QPoint cursorPos = e->pos();
+  QPoint cursorPos = e->position().toPoint();
 
   setFitToWindow(false);
 
   // scroll in logarithmic scale
   double logScale = logf(m_TexDisplay.scale);
-  logScale += e->delta() / 2500.0;
+  logScale += e->angleDelta().y() / 2500.0;
   UI_SetScale((float)expf(logScale), cursorPos.x() * ui->render->devicePixelRatioF(),
               cursorPos.y() * ui->render->devicePixelRatioF());
 
@@ -3012,7 +3016,7 @@ void TextureViewer::Reset()
   {
     QPalette Pal(palette());
 
-    Pal.setColor(QPalette::Background, Qt::black);
+    Pal.setColor(QPalette::Window, Qt::black);
 
     ui->pickSwatch->setAutoFillBackground(true);
     ui->pickSwatch->setPalette(Pal);

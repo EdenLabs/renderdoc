@@ -37,6 +37,7 @@
 #include <QShortcut>
 #include <QToolButton>
 #include <QToolTip>
+#include <QStandardPaths>
 #include "Code/QRDUtils.h"
 #include "Code/Resources.h"
 #include "Widgets/Extended/RDLabel.h"
@@ -80,7 +81,7 @@ void NetworkWorker::get(QUrl url)
 
   // connect up error and finished slots on *this* thread, and in the lambda emit signals to
   // cross-thread back onto the UI thread.
-  QObject::connect(req, OverloadedSlot<QNetworkReply::NetworkError>::of(&QNetworkReply::error),
+  QObject::connect(req, &QNetworkReply::errorOccurred,
                    [this, req](QNetworkReply::NetworkError) {
                      emit requestFailed(req->url(), req->errorString());
                    });
@@ -621,7 +622,7 @@ void MainWindow::on_action_Open_Capture_with_Options_triggered()
 
   QVBoxLayout l;
   l.addWidget(replayOptions);
-  l.setMargin(3);
+  l.setContentsMargins(3, 3, 3, 3);
   l.setSizeConstraint(QLayout::SetFixedSize);
 
   openWithOptions->setLayout(&l);

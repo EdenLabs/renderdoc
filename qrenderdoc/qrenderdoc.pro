@@ -24,7 +24,8 @@ INCLUDEPATH += $$_PRO_FILE_PWD_/3rdparty
 
 # For Scintilla source builds - we unfortunately are not able to scope these to only
 # those source files
-INCLUDEPATH += $$_PRO_FILE_PWD_/3rdparty/scintilla/include/qt
+INCLUDEPATH += $$_PRO_FILE_PWD_/3rdparty/scintilla/qt/ScintillaEditBase
+INCLUDEPATH += $$_PRO_FILE_PWD_/3rdparty/scintilla/qt/ScintillaEdit
 INCLUDEPATH += $$_PRO_FILE_PWD_/3rdparty/scintilla/include
 
 # Disable conversions to/from const char * in QString
@@ -428,7 +429,8 @@ INCLUDEPATH += $$_PRO_FILE_PWD_/3rdparty/lexilla/include
 # Scintilla 5.x sources
 SOURCES += \
     $$_PRO_FILE_PWD_/3rdparty/scintilla/src/*.cxx \
-    $$_PRO_FILE_PWD_/3rdparty/scintilla/qt/ScintillaEditBase/*.cpp
+    $$_PRO_FILE_PWD_/3rdparty/scintilla/qt/ScintillaEditBase/*.cpp \
+    $$_PRO_FILE_PWD_/3rdparty/scintilla/qt/ScintillaEdit/*.cpp
 
 # Lexilla sources
 SOURCES += \
@@ -439,7 +441,8 @@ SOURCES += \
 # Scintilla 5.x headers
 HEADERS += \
     $$_PRO_FILE_PWD_/3rdparty/scintilla/src/*.h \
-    $$_PRO_FILE_PWD_/3rdparty/scintilla/qt/ScintillaEditBase/*.h
+    $$_PRO_FILE_PWD_/3rdparty/scintilla/qt/ScintillaEditBase/*.h \
+    $$_PRO_FILE_PWD_/3rdparty/scintilla/qt/ScintillaEdit/*.h
 
 # Lexilla headers
 HEADERS += \

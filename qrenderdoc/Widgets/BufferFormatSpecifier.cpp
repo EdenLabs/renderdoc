@@ -33,8 +33,8 @@
 #include "Code/QRDUtils.h"
 #include "Code/ScintillaSyntax.h"
 #include "Widgets/Extended/RDSplitter.h"
-#include "scintilla/include/SciLexer.h"
-#include "scintilla/include/qt/ScintillaEdit.h"
+#include "SciLexer.h"
+#include "ScintillaEdit.h"
 #include "ui_BufferFormatSpecifier.h"
 
 static const int ERROR_STYLE = STYLE_LASTPREDEFINED + 1;
@@ -129,9 +129,16 @@ BufferFormatSpecifier::BufferFormatSpecifier(QWidget *parent)
   formatContainer->setFrameShadow(QFrame::Plain);
 
   QObject::connect(formatText, &ScintillaEdit::modified,
-                   [this](int type, int, int, int, const QByteArray &, int, int, int) {
+                   [this](Scintilla::ModificationFlags type,
+                          Scintilla::Position, Scintilla::Position,
+                          Scintilla::Position, const QByteArray &,
+                          Scintilla::Position, Scintilla::FoldLevel,
+                          Scintilla::FoldLevel) {
+                     using Scintilla::FlagSet;
+                     using MF = Scintilla::ModificationFlags;
                      ui->savedList->clearSelection();
-                     if(!(type & (SC_MOD_CHANGEANNOTATION | SC_MOD_CHANGESTYLE)))
+                     if(!FlagSet(type, MF::ChangeAnnotation)
+                        && !FlagSet(type, MF::ChangeStyle))
                        formatText->annotationClearAll();
                    });
 

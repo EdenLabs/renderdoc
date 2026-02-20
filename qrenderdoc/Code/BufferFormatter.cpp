@@ -2595,7 +2595,7 @@ QString BufferFormatter::GetBufferFormatString(Packing::Rules pack, ResourceId s
           format += QString::number(desc.columns);
 
         if(!desc.name.empty())
-          format += lit(" ") + desc.name;
+          format += lit(" ") + QString(desc.name);
 
         if(desc.elements > 1)
           format += QFormatStr("[%1]").arg(desc.elements);
@@ -6461,7 +6461,7 @@ struct s
   byte h;  // if trailing padding can be overlapped this will be 'inside' g
 };
 )";
-      parsed = BufferFormatter::ParseFormatString(lit("#pack(cbuffer)\n") + def, 0, true);
+      parsed = BufferFormatter::ParseFormatString(lit("#pack(cbuffer)\n") + QString(def), 0, true);
 
       CHECK(parsed.errors.isEmpty());
       CHECK(parsed.repeating.type.members.empty());
@@ -6478,7 +6478,7 @@ struct s
       CHECK(parsed.fixed.type.members[6].byteOffset == 160);    // g
       CHECK(parsed.fixed.type.members[7].byteOffset == 165);    // h
 
-      parsed = BufferFormatter::ParseFormatString(lit("#pack(d3duav)\n") + def, 0, true);
+      parsed = BufferFormatter::ParseFormatString(lit("#pack(d3duav)\n") + QString(def), 0, true);
 
       CHECK(parsed.errors.isEmpty());
       CHECK(parsed.repeating.type.members.empty());
@@ -6495,7 +6495,7 @@ struct s
       CHECK(parsed.fixed.type.members[6].byteOffset == 160);    // g
       CHECK(parsed.fixed.type.members[7].byteOffset == 168);    // h
 
-      parsed = BufferFormatter::ParseFormatString(lit("#pack(std140)\n") + def, 0, true);
+      parsed = BufferFormatter::ParseFormatString(lit("#pack(std140)\n") + QString(def), 0, true);
 
       CHECK(parsed.errors.isEmpty());
       CHECK(parsed.repeating.type.members.empty());
@@ -6512,7 +6512,7 @@ struct s
       CHECK(parsed.fixed.type.members[6].byteOffset == 160);    // g
       CHECK(parsed.fixed.type.members[7].byteOffset == 176);    // h
 
-      parsed = BufferFormatter::ParseFormatString(lit("#pack(std430)\n") + def, 0, true);
+      parsed = BufferFormatter::ParseFormatString(lit("#pack(std430)\n") + QString(def), 0, true);
 
       CHECK(parsed.errors.isEmpty());
       CHECK(parsed.repeating.type.members.empty());
@@ -6529,7 +6529,7 @@ struct s
       CHECK(parsed.fixed.type.members[6].byteOffset == 160);    // g
       CHECK(parsed.fixed.type.members[7].byteOffset == 168);    // h
 
-      parsed = BufferFormatter::ParseFormatString(lit("#pack(scalar)\n") + def, 0, true);
+      parsed = BufferFormatter::ParseFormatString(lit("#pack(scalar)\n") + QString(def), 0, true);
 
       CHECK(parsed.errors.isEmpty());
       CHECK(parsed.repeating.type.members.empty());

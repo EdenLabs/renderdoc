@@ -472,7 +472,7 @@ void CrashDialog::sendReport()
   multiPart->setParent(m_Request);
 
   QObject::connect(
-      m_Request, OverloadedSlot<QNetworkReply::NetworkError>::of(&QNetworkReply::error),
+      m_Request, &QNetworkReply::errorOccurred,
       [this](QNetworkReply::NetworkError err) {
         ui->progressBar->setValue(0);
         if(m_Request->error() == QNetworkReply::ProtocolInvalidOperationError)

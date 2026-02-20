@@ -238,7 +238,8 @@ void RDTableView::keyboardSearch(const QString &search)
 void RDTableView::paintEvent(QPaintEvent *e)
 {
   const int gridWidth = showGrid() ? 1 : 0;
-  QStyleOptionViewItem opt = viewOptions();
+  QStyleOptionViewItem opt;
+  initViewItemOption(&opt);
 
   QPainter painter(viewport());
 

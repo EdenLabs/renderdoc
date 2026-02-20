@@ -30,8 +30,8 @@
 #include "Code/QRDUtils.h"
 #include "Code/ScintillaSyntax.h"
 #include "Code/pyrenderdoc/PythonContext.h"
-#include "scintilla/include/SciLexer.h"
-#include "scintilla/include/qt/ScintillaEdit.h"
+#include "SciLexer.h"
+#include "ScintillaEdit.h"
 #include "ui_PythonShell.h"
 
 // a forwarder that invokes onto the UI thread wherever necessary.

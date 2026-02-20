@@ -296,7 +296,7 @@ public:
   {
     CameraWrapper::MouseWheel(e);
 
-    float mod = (1.0f - e->delta() / 2500.0f);
+    float mod = (1.0f - e->angleDelta().y() / 2500.0f);
 
     SetDistance(qMax(1e-6f, m_Distance * mod));
   }
@@ -497,7 +497,7 @@ struct BufferData
 {
   BufferData()
   {
-    refcount.store(1);
+    refcount.storeRelaxed(1);
     stride = 0;
   }
 
@@ -959,7 +959,7 @@ public:
   Qt::ItemFlags flags(const QModelIndex &index) const override
   {
     if(!index.isValid())
-      return 0;
+      return Qt::NoItemFlags;
 
     return QAbstractItemModel::flags(index);
   }
@@ -1001,7 +1001,8 @@ public:
     {
       if(role == Qt::SizeHintRole)
       {
-        QStyleOptionViewItem opt = view->viewOptions();
+        QStyleOptionViewItem opt;
+        view->initViewItemOption(&opt);
         opt.features |= QStyleOptionViewItem::HasDisplay;
 
         // pad these columns to allow for sufficiently wide data

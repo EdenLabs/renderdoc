@@ -27,8 +27,8 @@
 #include <QRegularExpression>
 #include "Code/QRDUtils.h"
 #include "Code/ScintillaSyntax.h"
-#include "scintilla/include/SciLexer.h"
-#include "scintilla/include/qt/ScintillaEdit.h"
+#include "SciLexer.h"
+#include "ScintillaEdit.h"
 #include "ui_CommentView.h"
 
 static const sptr_t link_style = 100;
@@ -116,7 +116,8 @@ CommentView::CommentView(ICaptureContext &ctx, QWidget *parent)
   m_commentsEditor->styleSetFore(link_style, SCINTILLA_COLOUR(fore.red(), fore.green(), fore.blue()));
 
   QObject::connect(
-      m_commentsEditor, &ScintillaEdit::hotSpotClick, [this](int position, int modifiers) {
+      m_commentsEditor, &ScintillaEdit::hotSpotClick,
+      [this](Scintilla::Position position, Scintilla::KeyMod modifiers) {
         int start = position;
         while(m_commentsEditor->styleAt(start - 1) == link_style)
           start--;

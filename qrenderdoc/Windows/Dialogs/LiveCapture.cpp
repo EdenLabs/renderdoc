@@ -663,7 +663,7 @@ void LiveCapture::updateAPIStatus()
     {
       apiStatus += tr(", %1 (Unsupported)").arg(api);
       if(!m_APIs[api].supportMessage.isEmpty())
-        apiStatus += lit("\n") + m_APIs[api].supportMessage;
+        apiStatus += lit("\n") + QString(m_APIs[api].supportMessage);
     }
     else if(!m_APIs[api].presenting)
     {

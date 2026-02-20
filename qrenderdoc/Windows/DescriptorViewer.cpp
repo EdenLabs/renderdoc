@@ -434,7 +434,7 @@ public:
   Qt::ItemFlags flags(const QModelIndex &index) const override
   {
     if(!index.isValid())
-      return 0;
+      return Qt::NoItemFlags;
 
     return QAbstractItemModel::flags(index);
   }
@@ -1284,14 +1284,8 @@ DescriptorViewer::DescriptorViewer(ICaptureContext &ctx, QWidget *parent)
 {
   ui->setupUi(this);
 
-  {
-    static bool registered = false;
-    if(!registered)
-    {
-      registered = true;
-      QMetaType::registerComparators<ButtonTag>();
-    }
-  }
+  // In Qt6, comparison operators are auto-registered
+  // with QMetaType, so no manual registration needed.
 
   m_Model = new DescriptorItemModel(ctx, *this, this);
 

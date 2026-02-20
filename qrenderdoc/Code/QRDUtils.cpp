@@ -1858,7 +1858,7 @@ QIcon MakeSwatchIcon(QWidget *parentWidget, QColor swatchColor)
   {
     QPainter painter(&pm);
 
-    QPen pen(parentWidget->palette().foreground(), 1.0);
+    QPen pen(parentWidget->palette().windowText(), 1.0);
     painter.setPen(pen);
     painter.drawLine(QPoint(0, 0), QPoint(h - 1, 0));
     painter.drawLine(QPoint(h - 1, 0), QPoint(h - 1, h - 1));
@@ -2516,7 +2516,7 @@ QString RDDialog::getExistingDirectory(QWidget *parent, const QString &caption, 
 {
   QFileDialog fd(parent, caption, dir, QString());
   fd.setAcceptMode(QFileDialog::AcceptOpen);
-  fd.setFileMode(QFileDialog::DirectoryOnly);
+  fd.setFileMode(QFileDialog::Directory);
   fd.setOptions(options);
   show(&fd);
 
@@ -3941,7 +3941,7 @@ QVariant StructuredDataItemModel::headerData(int section, Qt::Orientation orient
 Qt::ItemFlags StructuredDataItemModel::flags(const QModelIndex &index) const
 {
   if(!index.isValid())
-    return 0;
+    return Qt::NoItemFlags;
 
   return QAbstractItemModel::flags(index);
 }
