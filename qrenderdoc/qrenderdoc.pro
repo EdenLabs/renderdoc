@@ -4,13 +4,11 @@
 #
 #-------------------------------------------------
 
-QT       += core gui widgets svg network
+QT       += core gui widgets svg network core5compat
 
 CONFIG   += silent
 
-lessThan(QT_MAJOR_VERSION, 5): error("requires Qt 5.6; found $$[QT_VERSION]")
-
-equals(QT_MAJOR_VERSION, 5): lessThan(QT_MINOR_VERSION, 6): error("requires Qt 5.6; found $$[QT_VERSION]")
+lessThan(QT_MAJOR_VERSION, 6): error("requires Qt >= 6.0; found $$[QT_VERSION]")
 
 TARGET = qrenderdoc
 TEMPLATE = app
@@ -134,7 +132,7 @@ win32 {
 	SOURCES += $$CMAKE_DIR/qrenderdoc/qrenderdoc_python.cxx
 
 	CONFIG += warn_off
-	CONFIG += c++14
+	CONFIG += c++17
 	QMAKE_CFLAGS_WARN_OFF -= -w
 	QMAKE_CXXFLAGS_WARN_OFF -= -w
 
@@ -158,7 +156,6 @@ win32 {
 		QMAKE_POST_LINK += ln -sf $$[QT_INSTALL_PLUGINS] $${QTPLUGINS_PATH} ;
 		QMAKE_POST_LINK += sh $$_PRO_FILE_PWD_/../util/set_plist_version.sh $${RENDERDOC_VERSION}.0 $${INFO_PLIST_PATH}
 	} else {
-		QT += x11extras
 		DEFINES += RENDERDOC_PLATFORM_POSIX RENDERDOC_PLATFORM_LINUX RENDERDOC_WINDOWING_XLIB RENDERDOC_WINDOWING_XCB
 		QMAKE_LFLAGS += '-Wl,--no-as-needed -rdynamic'
 	}
@@ -420,18 +417,31 @@ HEADERS += 3rdparty/pythoncapi_compat.h
 # Add Scintilla last as it has extra search paths
 
 # Needed for building
-DEFINES += SCINTILLA_QT=1 MAKING_LIBRARY=1 SCI_LEXER=1
+DEFINES += SCINTILLA_QT=1 MAKING_LIBRARY=1
+# Scintilla 5.x include paths
 INCLUDEPATH += $$_PRO_FILE_PWD_/3rdparty/scintilla/src
-INCLUDEPATH += $$_PRO_FILE_PWD_/3rdparty/scintilla/lexlib
 
-SOURCES += $$_PRO_FILE_PWD_/3rdparty/scintilla/lexlib/*.cxx \
-    $$_PRO_FILE_PWD_/3rdparty/scintilla/lexers/*.cxx \
+# Lexilla include paths
+INCLUDEPATH += $$_PRO_FILE_PWD_/3rdparty/lexilla/lexlib
+INCLUDEPATH += $$_PRO_FILE_PWD_/3rdparty/lexilla/include
+
+# Scintilla 5.x sources
+SOURCES += \
     $$_PRO_FILE_PWD_/3rdparty/scintilla/src/*.cxx \
-    $$_PRO_FILE_PWD_/3rdparty/scintilla/qt/ScintillaEdit/*.cpp \
     $$_PRO_FILE_PWD_/3rdparty/scintilla/qt/ScintillaEditBase/*.cpp
 
-HEADERS += $$_PRO_FILE_PWD_/3rdparty/scintilla/lexlib/*.h \
+# Lexilla sources
+SOURCES += \
+    $$_PRO_FILE_PWD_/3rdparty/lexilla/lexlib/*.cxx \
+    $$_PRO_FILE_PWD_/3rdparty/lexilla/lexers/*.cxx \
+    $$_PRO_FILE_PWD_/3rdparty/lexilla/src/*.cxx
+
+# Scintilla 5.x headers
+HEADERS += \
     $$_PRO_FILE_PWD_/3rdparty/scintilla/src/*.h \
-    $$_PRO_FILE_PWD_/3rdparty/scintilla/qt/ScintillaEdit/*.h \
     $$_PRO_FILE_PWD_/3rdparty/scintilla/qt/ScintillaEditBase/*.h
+
+# Lexilla headers
+HEADERS += \
+    $$_PRO_FILE_PWD_/3rdparty/lexilla/lexlib/*.h
 

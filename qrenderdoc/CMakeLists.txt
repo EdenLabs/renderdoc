@@ -5,11 +5,11 @@ if( NOT DEFINED QT_QMAKE_EXECUTABLE )
     if( DEFINED QMAKE_EXECUTABLE )
         set( QT_QMAKE_EXECUTABLE "${QMAKE_EXECUTABLE}" )
     else()
-        set( QT_QMAKE_EXECUTABLE "qmake" )
+        set( QT_QMAKE_EXECUTABLE "qmake6" )
     endif()
 endif()
 
-set(QMAKE_QT5_COMMAND ${QT_QMAKE_EXECUTABLE} CACHE STRING "Command to run to invoke Qt5's qmake. Normally this is qmake, possibly with qtchooser, but might be qmake-qt5")
+set(QMAKE_QT6_COMMAND ${QT_QMAKE_EXECUTABLE} CACHE STRING "Command to run to invoke Qt6's qmake. Normally this is qmake, possibly with qtchooser, but might be qmake6")
 set(RENDERDOC_SWIG_PACKAGE https://github.com/baldurk/swig/archive/renderdoc-modified-7.zip CACHE STRING "The location where RenderDoc's swig fork source can be found. By default points to the URL on github but can be pointed to a local file.")
 set(RENDERDOC_PCRE_PACKAGE https://sourceforge.net/projects/pcre/files/pcre/8.45/pcre-8.45.tar.gz CACHE STRING "The location where the pcre library package can be found. By default points to the URL on sourceforge but can be pointed to a local file.")
 
@@ -17,7 +17,7 @@ set(RENDERDOC_PCRE_PACKAGE https://sourceforge.net/projects/pcre/files/pcre/8.45
 if(ENABLE_QRENDERDOC)
 
 execute_process(
-    COMMAND ${QMAKE_QT5_COMMAND} -query QT_VERSION
+    COMMAND ${QMAKE_QT6_COMMAND} -query QT_VERSION
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     OUTPUT_VARIABLE QT_VERSION
     ERROR_VARIABLE QT_VERSION_STDERR
@@ -25,11 +25,10 @@ execute_process(
     ERROR_STRIP_TRAILING_WHITESPACE
     )
 
-# we need the trailing .999 since 5.5.1 would be VERSION_GREATER than 5.5 which implicitly means 5.5.0
-if (QT_VERSION VERSION_GREATER 5.5.999)
+if (QT_VERSION VERSION_GREATER_EQUAL 6.0)
     message(STATUS "Building using Qt ${QT_VERSION}")
 else()
-    message(FATAL_ERROR "${QMAKE_QT5_COMMAND} -query QT_VERSION returned: \"${QT_VERSION}\". Error output was: \"${QT_VERSION_STDERR}\". We require Qt >= 5.6 and for the qmake executable to run Qt5. Check your distribution for how to configure Qt5, you may need to set the QT_SELECT environment variable or customise the cmake variable QMAKE_QT5_COMMAND to qmake-qt5")
+    message(FATAL_ERROR "${QMAKE_QT6_COMMAND} -query QT_VERSION returned: \"${QT_VERSION}\". Error output was: \"${QT_VERSION_STDERR}\". We require Qt >= 6.0 and for the qmake executable to run Qt6. Check your distribution for how to configure Qt6, you may need to set the QT_SELECT environment variable or customise the cmake variable QMAKE_QT6_COMMAND to qmake6")
 endif()
 
 endif() # if(ENABLE_QRENDERDOC)
@@ -415,7 +414,7 @@ endif()
 # Xcode does not match this behaviour. Add broad brush file dependencies.
 # Xcode has an option to match this behaviour (not exposed by cmake).
 add_custom_command(OUTPUT QRenderDoc
-    COMMAND ${SET_SYSTEM_PATH_COMMAND} ${QMAKE_QT5_COMMAND} "CMAKE_DIR=${CMAKE_BINARY_DIR}" ${CMAKE_CURRENT_SOURCE_DIR}
+    COMMAND ${SET_SYSTEM_PATH_COMMAND} ${QMAKE_QT6_COMMAND} "CMAKE_DIR=${CMAKE_BINARY_DIR}" ${CMAKE_CURRENT_SOURCE_DIR}
     COMMAND ${GENERATOR_MAKE} ${GENERATOR_MAKE_PARAMS}
     DEPENDS ${QRD_DEPENDENCIES})
 add_custom_target(build-qrenderdoc ALL DEPENDS QRenderDoc DEPENDS renderdoc DEPENDS swig-bindings)

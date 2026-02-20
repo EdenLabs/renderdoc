@@ -1,4 +1,4 @@
-// ScintillaDocument.h
+// @file ScintillaDocument.h
 // Wrapper for Scintilla document object so it can be manipulated independently.
 // Copyright (c) 2011 Archaeopteryx Software, Inc. d/b/a Wingware
 
@@ -8,10 +8,6 @@
 #include <QObject>
 
 class WatcherHelper;
-
-#ifdef SCI_NAMESPACE
-namespace Scintilla {
-#endif
 
 #ifndef EXPORT_IMPORT_API
 #ifdef WIN32
@@ -27,11 +23,16 @@ namespace Scintilla {
 #endif
 #endif
 
+// Forward declaration
+namespace Scintilla {
+    class IDocumentEditable;
+}
+
 class EXPORT_IMPORT_API ScintillaDocument : public QObject
 {
     Q_OBJECT
 
-    void *pdoc;
+    Scintilla::IDocumentEditable *pdoc;
     WatcherHelper *docWatcher;
 
 public:
@@ -49,7 +50,7 @@ public:
     void delete_undo_history();
     bool set_undo_collection(bool collect_undo);
     bool is_collecting_undo();
-    void begin_undo_action();
+    void begin_undo_action(bool coalesceWithPrior = false);
     void end_undo_action();
     void set_save_point();
     bool is_save_point();
@@ -63,7 +64,7 @@ public:
     int line_end_position(int pos);
     int length();
     int lines_total();
-    void start_styling(int position, char flags);
+    void start_styling(int position);
     bool set_style_for(int length, char style);
     int get_end_styled();
     void ensure_styled_to(int position);
@@ -80,30 +81,15 @@ public:
 
     int get_character(int pos); // Calls GetCharacterAndWidth(pos, NULL)
 
-private:
-    void emit_modify_attempt();
-    void emit_save_point(bool atSavePoint);
-    void emit_modified(int position, int modification_type, const QByteArray& text, int length,
-	int linesAdded, int line, int foldLevelNow, int foldLevelPrev);
-    void emit_style_needed(int pos);
-    void emit_lexer_changed();
-    void emit_error_occurred(int status);
-
 signals:
     void modify_attempt();
     void save_point(bool atSavePoint);
-    void modified(int position, int modification_type, const QByteArray& text, int length,
-	int linesAdded, int line, int foldLevelNow, int foldLevelPrev);
+    void modified(int position, int modification_type, const QByteArray &text, int length,
+		  int linesAdded, int line, int foldLevelNow, int foldLevelPrev);
     void style_needed(int pos);
-    void lexer_changed();
     void error_occurred(int status);
 
     friend class ::WatcherHelper;
-
 };
 
-#ifdef SCI_NAMESPACE
-}
-#endif
-
-#endif // SCINTILLADOCUMENT_H
+#endif /* SCINTILLADOCUMENT_H */

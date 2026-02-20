@@ -1,4 +1,4 @@
-//
+// @file PlatQt.h
 //          Copyright (c) 1990-2011, Scientific Toolworks, Inc.
 //
 // The License.txt file describes the conditions under which this software may be distributed.
@@ -11,22 +11,34 @@
 #ifndef PLATQT_H
 #define PLATQT_H
 
+#include <cstddef>
+#include <cstdint>
+
+#include <string>
+#include <string_view>
+#include <vector>
+#include <optional>
+#include <memory>
+
+#include "Debugging.h"
+#include "Geometry.h"
+#include "ScintillaTypes.h"
+#include "ScintillaMessages.h"
 #include "Platform.h"
 
+#include <QUrl>
 #include <QPaintDevice>
 #include <QPainter>
 #include <QHash>
+#include <QTextCodec>
 
-#ifdef SCI_NAMESPACE
-namespace Scintilla {
-#endif
+namespace Scintilla::Internal {
 
-const char *CharacterSetID(int characterSet);
+const char *CharacterSetID(Scintilla::CharacterSet characterSet);
 
-inline QColor QColorFromCA(ColourDesired ca)
+inline QColor QColorFromColourRGBA(ColourRGBA ca)
 {
-	long c = ca.AsLong();
-	return QColor(c & 0xff, (c >> 8) & 0xff, (c >> 16) & 0xff);
+	return QColor(ca.GetRed(), ca.GetGreen(), ca.GetBlue(), ca.GetAlpha());
 }
 
 inline QRect QRectFromPRect(PRectangle pr)
@@ -49,84 +61,105 @@ inline Point PointFromQPoint(QPoint qp)
 	return Point(qp.x(), qp.y());
 }
 
+inline QPointF QPointFFromPoint(Point qp)
+{
+	return QPointF(qp.x, qp.y);
+}
+
+constexpr PRectangle RectangleInset(PRectangle rc, XYPOSITION delta) noexcept {
+	return PRectangle(rc.left + delta, rc.top + delta, rc.right - delta, rc.bottom - delta);
+}
+
 class SurfaceImpl : public Surface {
 private:
-	QPaintDevice *device;
-	QPainter *painter;
-	bool deviceOwned;
-	bool painterOwned;
-	float x, y;
-	bool unicodeMode;
-	int codePage;
-	const char *codecName;
-	QTextCodec *codec;
+	QPaintDevice *device = nullptr;
+	QPainter *painter = nullptr;
+	bool deviceOwned = false;
+	bool painterOwned = false;
+	SurfaceMode mode;
+	const char *codecName = nullptr;
+	QTextCodec *codec = nullptr;
+
+	void Clear();
 
 public:
 	SurfaceImpl();
-	virtual ~SurfaceImpl();
+	SurfaceImpl(int width, int height, SurfaceMode mode_);
+	virtual ~SurfaceImpl() override;
 
-	virtual void Init(WindowID wid);
-	virtual void Init(SurfaceID sid, WindowID wid);
-	virtual void InitPixMap(int width, int height,
-		Surface *surface, WindowID wid);
+	void Init(WindowID wid) override;
+	void Init(SurfaceID sid, WindowID wid) override;
+	std::unique_ptr<Surface> AllocatePixMap(int width, int height) override;
 
-	virtual void Release();
-	virtual bool Initialised();
-	virtual void PenColour(ColourDesired fore);
-	virtual int LogPixelsY();
-	virtual int DeviceHeightFont(int points);
-	virtual void MoveTo(int x, int y);
-	virtual void LineTo(int x, int y);
-	virtual void Polygon(Point *pts, int npts, ColourDesired fore,
-		ColourDesired back);
-	virtual void RectangleDraw(PRectangle rc, ColourDesired fore,
-		ColourDesired back);
-	virtual void FillRectangle(PRectangle rc, ColourDesired back);
-	virtual void FillRectangle(PRectangle rc, Surface &surfacePattern);
-	virtual void RoundedRectangle(PRectangle rc, ColourDesired fore,
-		ColourDesired back);
-	virtual void AlphaRectangle(PRectangle rc, int corner, ColourDesired fill,
-		int alphaFill, ColourDesired outline, int alphaOutline, int flags);
-	virtual void DrawRGBAImage(PRectangle rc, int width, int height,
-		const unsigned char *pixelsImage);
-	virtual void Ellipse(PRectangle rc, ColourDesired fore,
-		ColourDesired back);
-	virtual void Copy(PRectangle rc, Point from, Surface &surfaceSource);
+	void SetMode(SurfaceMode mode) override;
 
-	virtual void DrawTextNoClip(PRectangle rc, Font &font, XYPOSITION ybase,
-		const char *s, int len, ColourDesired fore, ColourDesired back);
-	virtual void DrawTextClipped(PRectangle rc, Font &font, XYPOSITION ybase,
-		const char *s, int len, ColourDesired fore, ColourDesired back);
-	virtual void DrawTextTransparent(PRectangle rc, Font &font, XYPOSITION ybase,
-		const char *s, int len, ColourDesired fore);
-	virtual void MeasureWidths(Font &font, const char *s, int len,
-		XYPOSITION *positions);
-	virtual XYPOSITION WidthText(Font &font, const char *s, int len);
-	virtual XYPOSITION WidthChar(Font &font, char ch);
-	virtual XYPOSITION Ascent(Font &font);
-	virtual XYPOSITION Descent(Font &font);
-	virtual XYPOSITION InternalLeading(Font &font);
-	virtual XYPOSITION ExternalLeading(Font &font);
-	virtual XYPOSITION Height(Font &font);
-	virtual XYPOSITION AverageCharWidth(Font &font);
+	void Release() noexcept override;
+	int SupportsFeature(Scintilla::Supports feature) noexcept override;
+	bool Initialised() override;
+	void PenColour(ColourRGBA fore);
+	void PenColourWidth(ColourRGBA fore, XYPOSITION strokeWidth);
+	int LogPixelsY() override;
+	int PixelDivisions() override;
+	int DeviceHeightFont(int points) override;
+	void LineDraw(Point start, Point end, Stroke stroke) override;
+	void PolyLine(const Point *pts, size_t npts, Stroke stroke) override;
+	void Polygon(const Point *pts, size_t npts, FillStroke fillStroke) override;
+	void RectangleDraw(PRectangle rc, FillStroke fillStroke) override;
+	void RectangleFrame(PRectangle rc, Stroke stroke) override;
+	void FillRectangle(PRectangle rc, Fill fill) override;
+	void FillRectangleAligned(PRectangle rc, Fill fill) override;
+	void FillRectangle(PRectangle rc, Surface &surfacePattern) override;
+	void RoundedRectangle(PRectangle rc, FillStroke fillStroke) override;
+	void AlphaRectangle(PRectangle rc, XYPOSITION cornerSize, FillStroke fillStroke) override;
+	void GradientRectangle(PRectangle rc, const std::vector<ColourStop> &stops, GradientOptions options) override;
+	void DrawRGBAImage(PRectangle rc, int width, int height,
+		const unsigned char *pixelsImage) override;
+	void Ellipse(PRectangle rc, FillStroke fillStroke) override;
+	void Stadium(PRectangle rc, FillStroke fillStroke, Ends ends) override;
+	void Copy(PRectangle rc, Point from, Surface &surfaceSource) override;
 
-	virtual void SetClip(PRectangle rc);
-	virtual void FlushCachedState();
+	std::unique_ptr<IScreenLineLayout> Layout(const IScreenLine *screenLine) override;
 
-	virtual void SetUnicodeMode(bool unicodeMode);
-	virtual void SetDBCSMode(int codePage);
+	void DrawTextNoClip(PRectangle rc, const Font *font, XYPOSITION ybase,
+		std::string_view text, ColourRGBA fore, ColourRGBA back) override;
+	void DrawTextClipped(PRectangle rc, const Font *font, XYPOSITION ybase,
+		std::string_view text, ColourRGBA fore, ColourRGBA back) override;
+	void DrawTextTransparent(PRectangle rc, const Font *font, XYPOSITION ybase,
+		std::string_view text, ColourRGBA fore) override;
+	void MeasureWidths(const Font *font, std::string_view text,
+		XYPOSITION *positions) override;
+	XYPOSITION WidthText(const Font *font, std::string_view text) override;
 
-	void BrushColour(ColourDesired back);
-	void SetCodec(Font &font);
-	void SetFont(Font &font);
+	void DrawTextNoClipUTF8(PRectangle rc, const Font *font_, XYPOSITION ybase,
+		std::string_view text, ColourRGBA fore, ColourRGBA back) override;
+	void DrawTextClippedUTF8(PRectangle rc, const Font *font_, XYPOSITION ybase,
+		std::string_view text, ColourRGBA fore, ColourRGBA back) override;
+	void DrawTextTransparentUTF8(PRectangle rc, const Font *font_, XYPOSITION ybase,
+		std::string_view text, ColourRGBA fore) override;
+	void MeasureWidthsUTF8(const Font *font_, std::string_view text,
+		XYPOSITION *positions) override;
+	XYPOSITION WidthTextUTF8(const Font *font_, std::string_view text) override;
+
+	XYPOSITION Ascent(const Font *font) override;
+	XYPOSITION Descent(const Font *font) override;
+	XYPOSITION InternalLeading(const Font *font) override;
+	XYPOSITION Height(const Font *font) override;
+	XYPOSITION AverageCharWidth(const Font *font) override;
+
+	void SetClip(PRectangle rc) override;
+	void PopClip() override;
+	void FlushCachedState() override;
+	void FlushDrawing() override;
+
+	void BrushColour(ColourRGBA back);
+	void SetCodec(const Font *font);
+	void SetFont(const Font *font);
 
 	QPaintDevice *GetPaintDevice();
 	void SetPainter(QPainter *painter);
 	QPainter *GetPainter();
 };
 
-#ifdef SCI_NAMESPACE
 }
-#endif
 
 #endif

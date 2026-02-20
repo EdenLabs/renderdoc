@@ -1,12 +1,10 @@
-// ScintillaEdit.cpp
+// @file ScintillaEdit.cpp
 // Extended version of ScintillaEditBase with a method for each API
 // Copyright (c) 2011 Archaeopteryx Software, Inc. d/b/a Wingware
 
 #include "ScintillaEdit.h"
 
-#ifdef SCI_NAMESPACE
 using namespace Scintilla;
-#endif
 
 ScintillaEdit::ScintillaEdit(QWidget *parent) : ScintillaEditBase(parent) {
 }
@@ -15,11 +13,12 @@ ScintillaEdit::~ScintillaEdit() {
 }
 
 QByteArray ScintillaEdit::TextReturner(int message, uptr_t wParam) const {
-    int length = send(message, wParam, 0);
-    QByteArray ba(length, '\0');
+    // While Scintilla can return strings longer than maximum(int), QByteArray uses int size
+    const int length = static_cast<int>(send(message, wParam, 0));
+    QByteArray ba(length + 1, '\0');
     send(message, wParam, (sptr_t)ba.data());
     // Remove extra NULs
-    if (ba.size() > 0 && ba.at(ba.size()-1) == 0)
+    if (ba.at(ba.size()-1) == 0)
         ba.chop(1);
     return ba;
 }
@@ -30,7 +29,7 @@ QPair<int, int>ScintillaEdit::find_text(int flags, const char *text, int cpMin, 
     ft.chrg.cpMax = cpMax;
     ft.chrgText.cpMin = cpMin;
     ft.chrgText.cpMax = cpMax;
-    ft.lpstrText = const_cast<char *>(text);
+    ft.lpstrText = text;
 
     int start = send(SCI_FINDTEXT, flags, (uptr_t) (&ft));
 
@@ -133,6 +132,10 @@ sptr_t ScintillaEdit::styleAt(sptr_t pos) const {
     return send(SCI_GETSTYLEAT, pos, 0);
 }
 
+sptr_t ScintillaEdit::styleIndexAt(sptr_t pos) const {
+    return send(SCI_GETSTYLEINDEXAT, pos, 0);
+}
+
 void ScintillaEdit::redo() {
     send(SCI_REDO, 0, 0);
 }
@@ -159,6 +162,14 @@ sptr_t ScintillaEdit::markerLineFromHandle(sptr_t markerHandle) {
 
 void ScintillaEdit::markerDeleteHandle(sptr_t markerHandle) {
     send(SCI_MARKERDELETEHANDLE, markerHandle, 0);
+}
+
+sptr_t ScintillaEdit::markerHandleFromLine(sptr_t line, sptr_t which) {
+    return send(SCI_MARKERHANDLEFROMLINE, line, which);
+}
+
+sptr_t ScintillaEdit::markerNumberFromLine(sptr_t line, sptr_t which) {
+    return send(SCI_MARKERNUMBERFROMLINE, line, which);
 }
 
 bool ScintillaEdit::undoCollection() const {
@@ -245,6 +256,14 @@ sptr_t ScintillaEdit::tabWidth() const {
     return send(SCI_GETTABWIDTH, 0, 0);
 }
 
+void ScintillaEdit::setTabMinimumWidth(sptr_t pixels) {
+    send(SCI_SETTABMINIMUMWIDTH, pixels, 0);
+}
+
+sptr_t ScintillaEdit::tabMinimumWidth() const {
+    return send(SCI_GETTABMINIMUMWIDTH, 0, 0);
+}
+
 void ScintillaEdit::clearTabStops(sptr_t line) {
     send(SCI_CLEARTABSTOPS, line, 0);
 }
@@ -259,6 +278,14 @@ sptr_t ScintillaEdit::getNextTabStop(sptr_t line, sptr_t x) {
 
 void ScintillaEdit::setCodePage(sptr_t codePage) {
     send(SCI_SETCODEPAGE, codePage, 0);
+}
+
+void ScintillaEdit::setFontLocale(const char * localeName) {
+    send(SCI_SETFONTLOCALE, 0, (sptr_t)localeName);
+}
+
+QByteArray ScintillaEdit::fontLocale() const {
+    return TextReturner(SCI_GETFONTLOCALE, 0);
 }
 
 sptr_t ScintillaEdit::iMEInteraction() const {
@@ -283,6 +310,22 @@ void ScintillaEdit::markerSetBack(sptr_t markerNumber, sptr_t back) {
 
 void ScintillaEdit::markerSetBackSelected(sptr_t markerNumber, sptr_t back) {
     send(SCI_MARKERSETBACKSELECTED, markerNumber, back);
+}
+
+void ScintillaEdit::markerSetForeTranslucent(sptr_t markerNumber, sptr_t fore) {
+    send(SCI_MARKERSETFORETRANSLUCENT, markerNumber, fore);
+}
+
+void ScintillaEdit::markerSetBackTranslucent(sptr_t markerNumber, sptr_t back) {
+    send(SCI_MARKERSETBACKTRANSLUCENT, markerNumber, back);
+}
+
+void ScintillaEdit::markerSetBackSelectedTranslucent(sptr_t markerNumber, sptr_t back) {
+    send(SCI_MARKERSETBACKSELECTEDTRANSLUCENT, markerNumber, back);
+}
+
+void ScintillaEdit::markerSetStrokeWidth(sptr_t markerNumber, sptr_t hundredths) {
+    send(SCI_MARKERSETSTROKEWIDTH, markerNumber, hundredths);
 }
 
 void ScintillaEdit::markerEnableHighlight(bool enabled) {
@@ -323,6 +366,14 @@ void ScintillaEdit::markerAddSet(sptr_t line, sptr_t markerSet) {
 
 void ScintillaEdit::markerSetAlpha(sptr_t markerNumber, sptr_t alpha) {
     send(SCI_MARKERSETALPHA, markerNumber, alpha);
+}
+
+sptr_t ScintillaEdit::markerLayer(sptr_t markerNumber) const {
+    return send(SCI_MARKERGETLAYER, markerNumber, 0);
+}
+
+void ScintillaEdit::markerSetLayer(sptr_t markerNumber, sptr_t layer) {
+    send(SCI_MARKERSETLAYER, markerNumber, layer);
 }
 
 void ScintillaEdit::setMarginTypeN(sptr_t margin, sptr_t marginType) {
@@ -501,6 +552,46 @@ void ScintillaEdit::styleSetHotSpot(sptr_t style, bool hotspot) {
     send(SCI_STYLESETHOTSPOT, style, hotspot);
 }
 
+void ScintillaEdit::styleSetCheckMonospaced(sptr_t style, bool checkMonospaced) {
+    send(SCI_STYLESETCHECKMONOSPACED, style, checkMonospaced);
+}
+
+bool ScintillaEdit::styleCheckMonospaced(sptr_t style) const {
+    return send(SCI_STYLEGETCHECKMONOSPACED, style, 0);
+}
+
+void ScintillaEdit::styleSetInvisibleRepresentation(sptr_t style, const char * representation) {
+    send(SCI_STYLESETINVISIBLEREPRESENTATION, style, (sptr_t)representation);
+}
+
+QByteArray ScintillaEdit::styleInvisibleRepresentation(sptr_t style) const {
+    return TextReturner(SCI_STYLEGETINVISIBLEREPRESENTATION, style);
+}
+
+void ScintillaEdit::setElementColour(sptr_t element, sptr_t colourElement) {
+    send(SCI_SETELEMENTCOLOUR, element, colourElement);
+}
+
+sptr_t ScintillaEdit::elementColour(sptr_t element) const {
+    return send(SCI_GETELEMENTCOLOUR, element, 0);
+}
+
+void ScintillaEdit::resetElementColour(sptr_t element) {
+    send(SCI_RESETELEMENTCOLOUR, element, 0);
+}
+
+bool ScintillaEdit::elementIsSet(sptr_t element) const {
+    return send(SCI_GETELEMENTISSET, element, 0);
+}
+
+bool ScintillaEdit::elementAllowsTranslucent(sptr_t element) const {
+    return send(SCI_GETELEMENTALLOWSTRANSLUCENT, element, 0);
+}
+
+sptr_t ScintillaEdit::elementBaseColour(sptr_t element) const {
+    return send(SCI_GETELEMENTBASECOLOUR, element, 0);
+}
+
 void ScintillaEdit::setSelFore(bool useSetting, sptr_t fore) {
     send(SCI_SETSELFORE, useSetting, fore);
 }
@@ -523,6 +614,30 @@ bool ScintillaEdit::selEOLFilled() const {
 
 void ScintillaEdit::setSelEOLFilled(bool filled) {
     send(SCI_SETSELEOLFILLED, filled, 0);
+}
+
+sptr_t ScintillaEdit::selectionLayer() const {
+    return send(SCI_GETSELECTIONLAYER, 0, 0);
+}
+
+void ScintillaEdit::setSelectionLayer(sptr_t layer) {
+    send(SCI_SETSELECTIONLAYER, layer, 0);
+}
+
+sptr_t ScintillaEdit::caretLineLayer() const {
+    return send(SCI_GETCARETLINELAYER, 0, 0);
+}
+
+void ScintillaEdit::setCaretLineLayer(sptr_t layer) {
+    send(SCI_SETCARETLINELAYER, layer, 0);
+}
+
+bool ScintillaEdit::caretLineHighlightSubLine() const {
+    return send(SCI_GETCARETLINEHIGHLIGHTSUBLINE, 0, 0);
+}
+
+void ScintillaEdit::setCaretLineHighlightSubLine(bool subLine) {
+    send(SCI_SETCARETLINEHIGHLIGHTSUBLINE, subLine, 0);
 }
 
 void ScintillaEdit::setCaretFore(sptr_t fore) {
@@ -563,6 +678,14 @@ void ScintillaEdit::setWordChars(const char * characters) {
 
 QByteArray ScintillaEdit::wordChars() const {
     return TextReturner(SCI_GETWORDCHARS, 0);
+}
+
+void ScintillaEdit::setCharacterCategoryOptimization(sptr_t countCharacters) {
+    send(SCI_SETCHARACTERCATEGORYOPTIMIZATION, countCharacters, 0);
+}
+
+sptr_t ScintillaEdit::characterCategoryOptimization() const {
+    return send(SCI_GETCHARACTERCATEGORYOPTIMIZATION, 0, 0);
 }
 
 void ScintillaEdit::beginUndoAction() {
@@ -621,6 +744,14 @@ sptr_t ScintillaEdit::indicFlags(sptr_t indicator) const {
     return send(SCI_INDICGETFLAGS, indicator, 0);
 }
 
+void ScintillaEdit::indicSetStrokeWidth(sptr_t indicator, sptr_t hundredths) {
+    send(SCI_INDICSETSTROKEWIDTH, indicator, hundredths);
+}
+
+sptr_t ScintillaEdit::indicStrokeWidth(sptr_t indicator) const {
+    return send(SCI_INDICGETSTROKEWIDTH, indicator, 0);
+}
+
 void ScintillaEdit::setWhitespaceFore(bool useSetting, sptr_t fore) {
     send(SCI_SETWHITESPACEFORE, useSetting, fore);
 }
@@ -635,14 +766,6 @@ void ScintillaEdit::setWhitespaceSize(sptr_t size) {
 
 sptr_t ScintillaEdit::whitespaceSize() const {
     return send(SCI_GETWHITESPACESIZE, 0, 0);
-}
-
-void ScintillaEdit::setStyleBits(sptr_t bits) {
-    send(SCI_SETSTYLEBITS, bits, 0);
-}
-
-sptr_t ScintillaEdit::styleBits() const {
-    return send(SCI_GETSTYLEBITS, 0, 0);
 }
 
 void ScintillaEdit::setLineState(sptr_t line, sptr_t state) {
@@ -671,6 +794,14 @@ sptr_t ScintillaEdit::caretLineBack() const {
 
 void ScintillaEdit::setCaretLineBack(sptr_t back) {
     send(SCI_SETCARETLINEBACK, back, 0);
+}
+
+sptr_t ScintillaEdit::caretLineFrame() const {
+    return send(SCI_GETCARETLINEFRAME, 0, 0);
+}
+
+void ScintillaEdit::setCaretLineFrame(sptr_t width) {
+    send(SCI_SETCARETLINEFRAME, width, 0);
 }
 
 void ScintillaEdit::styleSetChangeable(sptr_t style, bool changeable) {
@@ -753,6 +884,14 @@ bool ScintillaEdit::autoCAutoHide() const {
     return send(SCI_AUTOCGETAUTOHIDE, 0, 0);
 }
 
+void ScintillaEdit::autoCSetOptions(sptr_t options) {
+    send(SCI_AUTOCSETOPTIONS, options, 0);
+}
+
+sptr_t ScintillaEdit::autoCOptions() const {
+    return send(SCI_AUTOCGETOPTIONS, 0, 0);
+}
+
 void ScintillaEdit::autoCSetDropRestOfWord(bool dropRestOfWord) {
     send(SCI_AUTOCSETDROPRESTOFWORD, dropRestOfWord, 0);
 }
@@ -827,6 +966,10 @@ sptr_t ScintillaEdit::column(sptr_t pos) const {
 
 sptr_t ScintillaEdit::countCharacters(sptr_t start, sptr_t end) {
     return send(SCI_COUNTCHARACTERS, start, end);
+}
+
+sptr_t ScintillaEdit::countCodeUnits(sptr_t start, sptr_t end) {
+    return send(SCI_COUNTCODEUNITS, start, end);
 }
 
 void ScintillaEdit::setHScrollBar(bool visible) {
@@ -909,6 +1052,14 @@ sptr_t ScintillaEdit::printColourMode() const {
     return send(SCI_GETPRINTCOLOURMODE, 0, 0);
 }
 
+void ScintillaEdit::setChangeHistory(sptr_t changeHistory) {
+    send(SCI_SETCHANGEHISTORY, changeHistory, 0);
+}
+
+sptr_t ScintillaEdit::changeHistory() const {
+    return send(SCI_GETCHANGEHISTORY, 0, 0);
+}
+
 sptr_t ScintillaEdit::firstVisibleLine() const {
     return send(SCI_GETFIRSTVISIBLELINE, 0, 0);
 }
@@ -919,6 +1070,10 @@ QByteArray ScintillaEdit::getLine(sptr_t line) {
 
 sptr_t ScintillaEdit::lineCount() const {
     return send(SCI_GETLINECOUNT, 0, 0);
+}
+
+void ScintillaEdit::allocateLines(sptr_t lines) {
+    send(SCI_ALLOCATELINES, lines, 0);
 }
 
 void ScintillaEdit::setMarginLeft(sptr_t pixelWidth) {
@@ -951,6 +1106,10 @@ QByteArray ScintillaEdit::getSelText() {
 
 void ScintillaEdit::hideSelection(bool hide) {
     send(SCI_HIDESELECTION, hide, 0);
+}
+
+bool ScintillaEdit::selectionHidden() const {
+    return send(SCI_GETSELECTIONHIDDEN, 0, 0);
 }
 
 sptr_t ScintillaEdit::pointXFromPosition(sptr_t pos) {
@@ -1041,6 +1200,10 @@ sptr_t ScintillaEdit::directFunction() const {
     return send(SCI_GETDIRECTFUNCTION, 0, 0);
 }
 
+sptr_t ScintillaEdit::directStatusFunction() const {
+    return send(SCI_GETDIRECTSTATUSFUNCTION, 0, 0);
+}
+
 sptr_t ScintillaEdit::directPointer() const {
     return send(SCI_GETDIRECTPOINTER, 0, 0);
 }
@@ -1069,12 +1232,28 @@ sptr_t ScintillaEdit::targetStart() const {
     return send(SCI_GETTARGETSTART, 0, 0);
 }
 
+void ScintillaEdit::setTargetStartVirtualSpace(sptr_t space) {
+    send(SCI_SETTARGETSTARTVIRTUALSPACE, space, 0);
+}
+
+sptr_t ScintillaEdit::targetStartVirtualSpace() const {
+    return send(SCI_GETTARGETSTARTVIRTUALSPACE, 0, 0);
+}
+
 void ScintillaEdit::setTargetEnd(sptr_t end) {
     send(SCI_SETTARGETEND, end, 0);
 }
 
 sptr_t ScintillaEdit::targetEnd() const {
     return send(SCI_GETTARGETEND, 0, 0);
+}
+
+void ScintillaEdit::setTargetEndVirtualSpace(sptr_t space) {
+    send(SCI_SETTARGETENDVIRTUALSPACE, space, 0);
+}
+
+sptr_t ScintillaEdit::targetEndVirtualSpace() const {
+    return send(SCI_GETTARGETENDVIRTUALSPACE, 0, 0);
 }
 
 void ScintillaEdit::setTargetRange(sptr_t start, sptr_t end) {
@@ -1219,6 +1398,18 @@ void ScintillaEdit::toggleFoldShowText(sptr_t line, const char * text) {
 
 void ScintillaEdit::foldDisplayTextSetStyle(sptr_t style) {
     send(SCI_FOLDDISPLAYTEXTSETSTYLE, style, 0);
+}
+
+sptr_t ScintillaEdit::foldDisplayTextStyle() const {
+    return send(SCI_FOLDDISPLAYTEXTGETSTYLE, 0, 0);
+}
+
+void ScintillaEdit::setDefaultFoldDisplayText(const char * text) {
+    send(SCI_SETDEFAULTFOLDDISPLAYTEXT, 0, (sptr_t)text);
+}
+
+QByteArray ScintillaEdit::getDefaultFoldDisplayText() {
+    return TextReturner(SCI_GETDEFAULTFOLDDISPLAYTEXT, 0);
 }
 
 void ScintillaEdit::foldLine(sptr_t line, sptr_t action) {
@@ -1393,14 +1584,6 @@ void ScintillaEdit::appendText(sptr_t length, const char * text) {
     send(SCI_APPENDTEXT, length, (sptr_t)text);
 }
 
-bool ScintillaEdit::twoPhaseDraw() const {
-    return send(SCI_GETTWOPHASEDRAW, 0, 0);
-}
-
-void ScintillaEdit::setTwoPhaseDraw(bool twoPhase) {
-    send(SCI_SETTWOPHASEDRAW, twoPhase, 0);
-}
-
 sptr_t ScintillaEdit::phasesDraw() const {
     return send(SCI_GETPHASESDRAW, 0, 0);
 }
@@ -1447,6 +1630,14 @@ void ScintillaEdit::setFoldMarginColour(bool useSetting, sptr_t back) {
 
 void ScintillaEdit::setFoldMarginHiColour(bool useSetting, sptr_t fore) {
     send(SCI_SETFOLDMARGINHICOLOUR, useSetting, fore);
+}
+
+void ScintillaEdit::setAccessibility(sptr_t accessibility) {
+    send(SCI_SETACCESSIBILITY, accessibility, 0);
+}
+
+sptr_t ScintillaEdit::accessibility() const {
+    return send(SCI_GETACCESSIBILITY, 0, 0);
 }
 
 void ScintillaEdit::lineDown() {
@@ -1613,6 +1804,10 @@ void ScintillaEdit::lineTranspose() {
     send(SCI_LINETRANSPOSE, 0, 0);
 }
 
+void ScintillaEdit::lineReverse() {
+    send(SCI_LINEREVERSE, 0, 0);
+}
+
 void ScintillaEdit::lineDuplicate() {
     send(SCI_LINEDUPLICATE, 0, 0);
 }
@@ -1709,6 +1904,10 @@ sptr_t ScintillaEdit::braceMatch(sptr_t pos, sptr_t maxReStyle) {
     return send(SCI_BRACEMATCH, pos, maxReStyle);
 }
 
+sptr_t ScintillaEdit::braceMatchNext(sptr_t pos, sptr_t startPos) {
+    return send(SCI_BRACEMATCHNEXT, pos, startPos);
+}
+
 bool ScintillaEdit::viewEOL() const {
     return send(SCI_GETVIEWEOL, 0, 0);
 }
@@ -1761,6 +1960,10 @@ void ScintillaEdit::multiEdgeClearAll() {
     send(SCI_MULTIEDGECLEARALL, 0, 0);
 }
 
+sptr_t ScintillaEdit::multiEdgeColumn(sptr_t which) const {
+    return send(SCI_GETMULTIEDGECOLUMN, which, 0);
+}
+
 void ScintillaEdit::searchAnchor() {
     send(SCI_SEARCHANCHOR, 0, 0);
 }
@@ -1793,8 +1996,8 @@ sptr_t ScintillaEdit::zoom() const {
     return send(SCI_GETZOOM, 0, 0);
 }
 
-sptr_t ScintillaEdit::createDocument() {
-    return send(SCI_CREATEDOCUMENT, 0, 0);
+sptr_t ScintillaEdit::createDocument(sptr_t bytes, sptr_t documentOptions) {
+    return send(SCI_CREATEDOCUMENT, bytes, documentOptions);
 }
 
 void ScintillaEdit::addRefDocument(sptr_t doc) {
@@ -1805,8 +2008,20 @@ void ScintillaEdit::releaseDocument(sptr_t doc) {
     send(SCI_RELEASEDOCUMENT, 0, doc);
 }
 
+sptr_t ScintillaEdit::documentOptions() const {
+    return send(SCI_GETDOCUMENTOPTIONS, 0, 0);
+}
+
 sptr_t ScintillaEdit::modEventMask() const {
     return send(SCI_GETMODEVENTMASK, 0, 0);
+}
+
+void ScintillaEdit::setCommandEvents(bool commandEvents) {
+    send(SCI_SETCOMMANDEVENTS, commandEvents, 0);
+}
+
+bool ScintillaEdit::commandEvents() const {
+    return send(SCI_GETCOMMANDEVENTS, 0, 0);
 }
 
 void ScintillaEdit::setFocus(bool focus) {
@@ -1977,6 +2192,10 @@ sptr_t ScintillaEdit::positionRelative(sptr_t pos, sptr_t relative) {
     return send(SCI_POSITIONRELATIVE, pos, relative);
 }
 
+sptr_t ScintillaEdit::positionRelativeCodeUnits(sptr_t pos, sptr_t relative) {
+    return send(SCI_POSITIONRELATIVECODEUNITS, pos, relative);
+}
+
 void ScintillaEdit::copyRange(sptr_t start, sptr_t end) {
     send(SCI_COPYRANGE, start, end);
 }
@@ -1991,6 +2210,10 @@ void ScintillaEdit::setSelectionMode(sptr_t selectionMode) {
 
 sptr_t ScintillaEdit::selectionMode() const {
     return send(SCI_GETSELECTIONMODE, 0, 0);
+}
+
+bool ScintillaEdit::moveExtendsSelection() const {
+    return send(SCI_GETMOVEEXTENDSSELECTION, 0, 0);
 }
 
 sptr_t ScintillaEdit::getLineSelStartPosition(sptr_t line) {
@@ -2161,6 +2384,10 @@ bool ScintillaEdit::pasteConvertEndings() const {
     return send(SCI_GETPASTECONVERTENDINGS, 0, 0);
 }
 
+void ScintillaEdit::replaceRectangular(sptr_t length, const char * text) {
+    send(SCI_REPLACERECTANGULAR, length, (sptr_t)text);
+}
+
 void ScintillaEdit::selectionDuplicate() {
     send(SCI_SELECTIONDUPLICATE, 0, 0);
 }
@@ -2227,6 +2454,14 @@ void ScintillaEdit::setPositionCache(sptr_t size) {
 
 sptr_t ScintillaEdit::positionCache() const {
     return send(SCI_GETPOSITIONCACHE, 0, 0);
+}
+
+void ScintillaEdit::setLayoutThreads(sptr_t threads) {
+    send(SCI_SETLAYOUTTHREADS, threads, 0);
+}
+
+sptr_t ScintillaEdit::layoutThreads() const {
+    return send(SCI_GETLAYOUTTHREADS, 0, 0);
 }
 
 void ScintillaEdit::copyAllowLine() {
@@ -2445,12 +2680,12 @@ void ScintillaEdit::clearSelections() {
     send(SCI_CLEARSELECTIONS, 0, 0);
 }
 
-sptr_t ScintillaEdit::setSelection(sptr_t caret, sptr_t anchor) {
-    return send(SCI_SETSELECTION, caret, anchor);
+void ScintillaEdit::setSelection(sptr_t caret, sptr_t anchor) {
+    send(SCI_SETSELECTION, caret, anchor);
 }
 
-sptr_t ScintillaEdit::addSelection(sptr_t caret, sptr_t anchor) {
-    return send(SCI_ADDSELECTION, caret, anchor);
+void ScintillaEdit::addSelection(sptr_t caret, sptr_t anchor) {
+    send(SCI_ADDSELECTION, caret, anchor);
 }
 
 void ScintillaEdit::dropSelectionN(sptr_t selection) {
@@ -2505,8 +2740,16 @@ sptr_t ScintillaEdit::selectionNStart(sptr_t selection) const {
     return send(SCI_GETSELECTIONNSTART, selection, 0);
 }
 
+sptr_t ScintillaEdit::selectionNStartVirtualSpace(sptr_t selection) const {
+    return send(SCI_GETSELECTIONNSTARTVIRTUALSPACE, selection, 0);
+}
+
 void ScintillaEdit::setSelectionNEnd(sptr_t selection, sptr_t caret) {
     send(SCI_SETSELECTIONNEND, selection, caret);
+}
+
+sptr_t ScintillaEdit::selectionNEndVirtualSpace(sptr_t selection) const {
+    return send(SCI_GETSELECTIONNENDVIRTUALSPACE, selection, 0);
 }
 
 sptr_t ScintillaEdit::selectionNEnd(sptr_t selection) const {
@@ -2665,8 +2908,8 @@ sptr_t ScintillaEdit::technology() const {
     return send(SCI_GETTECHNOLOGY, 0, 0);
 }
 
-sptr_t ScintillaEdit::createLoader(sptr_t bytes) {
-    return send(SCI_CREATELOADER, bytes, 0);
+sptr_t ScintillaEdit::createLoader(sptr_t bytes, sptr_t documentOptions) {
+    return send(SCI_CREATELOADER, bytes, documentOptions);
 }
 
 void ScintillaEdit::findIndicatorShow(sptr_t start, sptr_t end) {
@@ -2721,16 +2964,92 @@ void ScintillaEdit::clearRepresentation(const char * encodedCharacter) {
     send(SCI_CLEARREPRESENTATION, (sptr_t)encodedCharacter, 0);
 }
 
+void ScintillaEdit::clearAllRepresentations() {
+    send(SCI_CLEARALLREPRESENTATIONS, 0, 0);
+}
+
+void ScintillaEdit::setRepresentationAppearance(const char * encodedCharacter, sptr_t appearance) {
+    send(SCI_SETREPRESENTATIONAPPEARANCE, (sptr_t)encodedCharacter, appearance);
+}
+
+sptr_t ScintillaEdit::representationAppearance(const char * encodedCharacter) const {
+    return send(SCI_GETREPRESENTATIONAPPEARANCE, (sptr_t)encodedCharacter, 0);
+}
+
+void ScintillaEdit::setRepresentationColour(const char * encodedCharacter, sptr_t colour) {
+    send(SCI_SETREPRESENTATIONCOLOUR, (sptr_t)encodedCharacter, colour);
+}
+
+sptr_t ScintillaEdit::representationColour(const char * encodedCharacter) const {
+    return send(SCI_GETREPRESENTATIONCOLOUR, (sptr_t)encodedCharacter, 0);
+}
+
+void ScintillaEdit::eOLAnnotationSetText(sptr_t line, const char * text) {
+    send(SCI_EOLANNOTATIONSETTEXT, line, (sptr_t)text);
+}
+
+QByteArray ScintillaEdit::eOLAnnotationText(sptr_t line) const {
+    return TextReturner(SCI_EOLANNOTATIONGETTEXT, line);
+}
+
+void ScintillaEdit::eOLAnnotationSetStyle(sptr_t line, sptr_t style) {
+    send(SCI_EOLANNOTATIONSETSTYLE, line, style);
+}
+
+sptr_t ScintillaEdit::eOLAnnotationStyle(sptr_t line) const {
+    return send(SCI_EOLANNOTATIONGETSTYLE, line, 0);
+}
+
+void ScintillaEdit::eOLAnnotationClearAll() {
+    send(SCI_EOLANNOTATIONCLEARALL, 0, 0);
+}
+
+void ScintillaEdit::eOLAnnotationSetVisible(sptr_t visible) {
+    send(SCI_EOLANNOTATIONSETVISIBLE, visible, 0);
+}
+
+sptr_t ScintillaEdit::eOLAnnotationVisible() const {
+    return send(SCI_EOLANNOTATIONGETVISIBLE, 0, 0);
+}
+
+void ScintillaEdit::eOLAnnotationSetStyleOffset(sptr_t style) {
+    send(SCI_EOLANNOTATIONSETSTYLEOFFSET, style, 0);
+}
+
+sptr_t ScintillaEdit::eOLAnnotationStyleOffset() const {
+    return send(SCI_EOLANNOTATIONGETSTYLEOFFSET, 0, 0);
+}
+
+bool ScintillaEdit::supportsFeature(sptr_t feature) const {
+    return send(SCI_SUPPORTSFEATURE, feature, 0);
+}
+
+sptr_t ScintillaEdit::lineCharacterIndex() const {
+    return send(SCI_GETLINECHARACTERINDEX, 0, 0);
+}
+
+void ScintillaEdit::allocateLineCharacterIndex(sptr_t lineCharacterIndex) {
+    send(SCI_ALLOCATELINECHARACTERINDEX, lineCharacterIndex, 0);
+}
+
+void ScintillaEdit::releaseLineCharacterIndex(sptr_t lineCharacterIndex) {
+    send(SCI_RELEASELINECHARACTERINDEX, lineCharacterIndex, 0);
+}
+
+sptr_t ScintillaEdit::lineFromIndexPosition(sptr_t pos, sptr_t lineCharacterIndex) {
+    return send(SCI_LINEFROMINDEXPOSITION, pos, lineCharacterIndex);
+}
+
+sptr_t ScintillaEdit::indexPositionFromLine(sptr_t line, sptr_t lineCharacterIndex) {
+    return send(SCI_INDEXPOSITIONFROMLINE, line, lineCharacterIndex);
+}
+
 void ScintillaEdit::startRecord() {
     send(SCI_STARTRECORD, 0, 0);
 }
 
 void ScintillaEdit::stopRecord() {
     send(SCI_STOPRECORD, 0, 0);
-}
-
-void ScintillaEdit::setLexer(sptr_t lexer) {
-    send(SCI_SETLEXER, lexer, 0);
 }
 
 sptr_t ScintillaEdit::lexer() const {
@@ -2749,14 +3068,6 @@ void ScintillaEdit::setKeyWords(sptr_t keyWordSet, const char * keyWords) {
     send(SCI_SETKEYWORDS, keyWordSet, (sptr_t)keyWords);
 }
 
-void ScintillaEdit::setLexerLanguage(const char * language) {
-    send(SCI_SETLEXERLANGUAGE, 0, (sptr_t)language);
-}
-
-void ScintillaEdit::loadLexerLibrary(const char * path) {
-    send(SCI_LOADLEXERLIBRARY, 0, (sptr_t)path);
-}
-
 QByteArray ScintillaEdit::property(const char * key) const {
     return TextReturner(SCI_GETPROPERTY, (sptr_t)key);
 }
@@ -2767,10 +3078,6 @@ QByteArray ScintillaEdit::propertyExpanded(const char * key) const {
 
 sptr_t ScintillaEdit::propertyInt(const char * key, sptr_t defaultValue) const {
     return send(SCI_GETPROPERTYINT, (sptr_t)key, defaultValue);
-}
-
-sptr_t ScintillaEdit::styleBitsNeeded() const {
-    return send(SCI_GETSTYLEBITSNEEDED, 0, 0);
 }
 
 QByteArray ScintillaEdit::lexerLanguage() const {
@@ -2835,6 +3142,34 @@ sptr_t ScintillaEdit::distanceToSecondaryStyles() const {
 
 QByteArray ScintillaEdit::subStyleBases() const {
     return TextReturner(SCI_GETSUBSTYLEBASES, 0);
+}
+
+sptr_t ScintillaEdit::namedStyles() const {
+    return send(SCI_GETNAMEDSTYLES, 0, 0);
+}
+
+QByteArray ScintillaEdit::nameOfStyle(sptr_t style) {
+    return TextReturner(SCI_NAMEOFSTYLE, style);
+}
+
+QByteArray ScintillaEdit::tagsOfStyle(sptr_t style) {
+    return TextReturner(SCI_TAGSOFSTYLE, style);
+}
+
+QByteArray ScintillaEdit::descriptionOfStyle(sptr_t style) {
+    return TextReturner(SCI_DESCRIPTIONOFSTYLE, style);
+}
+
+void ScintillaEdit::setILexer(sptr_t ilexer) {
+    send(SCI_SETILEXER, 0, ilexer);
+}
+
+sptr_t ScintillaEdit::bidirectional() const {
+    return send(SCI_GETBIDIRECTIONAL, 0, 0);
+}
+
+void ScintillaEdit::setBidirectional(sptr_t bidirectional) {
+    send(SCI_SETBIDIRECTIONAL, bidirectional, 0);
 }
 
 /* --Autogenerated -- end of section automatically generated from Scintilla.iface */
