@@ -552,31 +552,34 @@ void RDTweakedNativeStyle::drawControl(ControlElement control, const QStyleOptio
     return;
   }
 // https://bugreports.qt.io/browse/QTBUG-14949
-// work around itemview rendering bug - the first line in a multi-line text that is elided stops
-// all subsequent text from rendering. Should be fixed in 5.11, but for all other versions we need
-// to manually step in. We manually elide the text before calling down to the style
-//
-// However in 5.11.1 at least on macOS it still seems to be broken
-#if 1    //(QT_VERSION < QT_VERSION_CHECK(5, 11, 0))
+// Work around itemview rendering bug - the first line in a multi-line
+// text that is elided stops all subsequent text from rendering. We
+// manually elide the text before calling down to the style.
   else if(control == QStyle::CE_ItemViewItem)
   {
-    const QStyleOptionViewItem *viewopt = qstyleoption_cast<const QStyleOptionViewItem *>(opt);
+    const QStyleOptionViewItem *viewopt =
+        qstyleoption_cast<const QStyleOptionViewItem *>(opt);
 
     // only if we're eliding, not wrapping, and we have multiple lines
     if((viewopt->features & QStyleOptionViewItem::WrapText) == 0 &&
        viewopt->text.contains(QChar::LineSeparator))
     {
-      const int hmargin = pixelMetric(QStyle::PM_FocusFrameHMargin, 0, widget) + 1;
+      const int hmargin =
+          pixelMetric(QStyle::PM_FocusFrameHMargin, 0, widget) + 1;
 
       QRect textRect =
-          subElementRect(SE_ItemViewItemText, viewopt, widget).adjusted(hmargin, 0, -hmargin, 0);
+          subElementRect(SE_ItemViewItemText, viewopt, widget)
+              .adjusted(hmargin, 0, -hmargin, 0);
 
       QFontMetrics metrics(viewopt->font);
 
-      QStringList lines = viewopt->text.split(QChar::LineSeparator);
+      QStringList lines =
+          viewopt->text.split(QChar::LineSeparator);
 
       for(QString &line : lines)
-        line = metrics.elidedText(line, viewopt->textElideMode, textRect.width(), 0);
+        line = metrics.elidedText(
+            line, viewopt->textElideMode,
+            textRect.width(), 0);
 
       QStyleOptionViewItem elided = *viewopt;
 
@@ -586,7 +589,6 @@ void RDTweakedNativeStyle::drawControl(ControlElement control, const QStyleOptio
       return;
     }
   }
-#endif
 
   QProxyStyle::drawControl(control, opt, p, widget);
 }

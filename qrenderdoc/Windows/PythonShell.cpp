@@ -968,15 +968,24 @@ PythonShell::PythonShell(ICaptureContext &ctx, QWidget *parent)
 
   scriptEditor->colourise(0, -1);
 
-  QObject::connect(scriptEditor, &ScintillaEdit::modified,
-                   [this](int type, int, int, int, const QByteArray &, int, int, int) {
-                     if(type & (SC_MOD_INSERTTEXT | SC_MOD_DELETETEXT | SC_MOD_BEFOREINSERT |
-                                SC_MOD_BEFOREDELETE))
-                     {
-                       scriptEditor->markerDeleteAll(CURRENT_MARKER);
-                       scriptEditor->markerDeleteAll(CURRENT_MARKER + 1);
-                     }
-                   });
+  QObject::connect(
+      scriptEditor, &ScintillaEdit::modified,
+      [this](Scintilla::ModificationFlags type,
+             Scintilla::Position, Scintilla::Position,
+             Scintilla::Position, const QByteArray &,
+             Scintilla::Position, Scintilla::FoldLevel,
+             Scintilla::FoldLevel) {
+        using Scintilla::FlagSet;
+        using MF = Scintilla::ModificationFlags;
+        if(FlagSet(type,
+                   MF::InsertText | MF::DeleteText
+                       | MF::BeforeInsert
+                       | MF::BeforeDelete))
+        {
+          scriptEditor->markerDeleteAll(CURRENT_MARKER);
+          scriptEditor->markerDeleteAll(CURRENT_MARKER + 1);
+        }
+      });
 
   QObject::connect(scriptEditor, &ScintillaEdit::charAdded, [this](int ch) {
     if(ch == '.')

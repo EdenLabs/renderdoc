@@ -25,7 +25,6 @@
 #include "ToolWindowManager.h"
 #include <QApplication>
 #include <QDebug>
-#include <QDesktopWidget>
 #include <QDrag>
 #include <QEvent>
 #include <QMetaMethod>

@@ -49,7 +49,7 @@ UpdateDialog::UpdateDialog(QString updateResponse, QWidget *parent)
   setWindowFlags((windowFlags() | Qt::MSWindowsFixedSizeDialogHint) &
                  ~Qt::WindowContextHelpButtonHint);
 
-  QStringList lines = updateResponse.split(QLatin1Char('\n'), QString::SkipEmptyParts);
+  QStringList lines = updateResponse.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
 
   m_NewVer = lines[0];
   m_URL = lines[1];

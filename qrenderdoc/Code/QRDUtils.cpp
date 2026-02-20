@@ -3499,8 +3499,8 @@ QColor contrastingColor(const QColor &col, const QColor &defaultCol)
 
 // we declare this partial class to get the accessors. THIS IS DANGEROUS as the ABI is unstable and
 // this is a private class. The first few functions have been stable for a while so we hope that it
-// will remain so. If a stable interface is added in future like QX11Info we should definitely use
-// it instead.
+// will remain so. If a stable interface is added in future like QNativeInterface we should
+// definitely use it instead.
 //
 // Unfortunately we need this for Wayland, so we only ever use it when we are absolutely forced to
 // because we're running under the Wayland Qt platform.

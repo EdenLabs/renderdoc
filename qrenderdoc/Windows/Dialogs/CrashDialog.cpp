@@ -25,7 +25,6 @@
 #include "CrashDialog.h"
 #include <QApplication>
 #include <QDateTime>
-#include <QDesktopWidget>
 #include <QElapsedTimer>
 #include <QFileInfo>
 #include <QHttpMultiPart>
@@ -202,8 +201,6 @@ CrashDialog::CrashDialog(PersistantConfig &cfg, QVariantMap crashReportJSON, QWi
            "libraries needed for SSL support. "
            "If you are building locally, check that ");
 
-#if(QT_VERSION >= QT_VERSION_CHECK(5, 14, 0))
-
 #if defined(Q_OS_WIN32)
 #if QT_POINTER_SIZE == 8
     text +=
@@ -213,16 +210,6 @@ CrashDialog::CrashDialog(PersistantConfig &cfg, QVariantMap crashReportJSON, QWi
 #endif
 #else
     text += tr("you have the runtime libopenssl library >= 1.1.1 available in your system.");
-#endif
-
-#else
-
-#if defined(Q_OS_WIN32)
-    text += tr("you have libeay32.dll and ssleay32.dll available next to qrenderdoc.exe.");
-#else
-    text += tr("you have the runtime libopenssl library >= 1.0.0 available in your system.");
-#endif
-
 #endif
 
     text += lit("</p>");

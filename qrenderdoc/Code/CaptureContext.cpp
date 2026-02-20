@@ -1051,10 +1051,14 @@ void CaptureContext::LoadCaptureThreaded(const QString &captureFile, const Repla
         }
       }
 
+      auto *x11App = qApp->nativeInterface<
+          QNativeInterface::QX11Application>();
       if(m_CurWinSystem == WindowingSystem::XCB)
-        m_XCBConnection = QX11Info::connection();
+        m_XCBConnection =
+            x11App ? x11App->connection() : nullptr;
       else
-        m_X11Display = QX11Info::display();
+        m_X11Display =
+            x11App ? x11App->display() : nullptr;
     }
 
 #elif defined(RENDERDOC_PLATFORM_APPLE)

@@ -52,22 +52,40 @@ CommentView::CommentView(ICaptureContext &ctx, QWidget *parent)
 
   QObject::connect(
       m_commentsEditor, &ScintillaEdit::modified,
-      [this](int type, int position, int length, int, const QByteArray &, int, int, int) {
-        // if there has been a change, restyle the region around the modification. We can't use just
-        // word boundaries so search back to the last whitespace character - this means we will
-        // restyle at most a line, likely much less.
-        if(type & (SC_MOD_INSERTTEXT | SC_MOD_DELETETEXT))
+      [this](Scintilla::ModificationFlags type,
+             Scintilla::Position position,
+             Scintilla::Position length,
+             Scintilla::Position, const QByteArray &,
+             Scintilla::Position, Scintilla::FoldLevel,
+             Scintilla::FoldLevel) {
+        using Scintilla::FlagSet;
+        using MF = Scintilla::ModificationFlags;
+
+        // If there has been a change, restyle the region
+        // around the modification. We can't use just word
+        // boundaries so search back to the last whitespace
+        // character - this means we will restyle at most a
+        // line, likely much less.
+        if(FlagSet(type,
+                   MF::InsertText | MF::DeleteText))
         {
-          int start = m_commentsEditor->wordStartPosition(position, false);
-          while(!isspace(m_commentsEditor->charAt(start)) && start > 0)
+          sptr_t start =
+              m_commentsEditor->wordStartPosition(
+                  position, false);
+          while(!isspace(m_commentsEditor->charAt(start))
+                && start > 0)
             start--;
-          int end = m_commentsEditor->wordEndPosition(position + length, false);
-          while(!isspace(m_commentsEditor->charAt(end)) && end < m_commentsEditor->length())
+          sptr_t end =
+              m_commentsEditor->wordEndPosition(
+                  position + length, false);
+          while(!isspace(m_commentsEditor->charAt(end))
+                && end < m_commentsEditor->length())
             end++;
 
           if(start < 0)
             start = 0;
-          if(end < 0 || end > m_commentsEditor->length())
+          if(end < 0
+             || end > m_commentsEditor->length())
             end = m_commentsEditor->length();
 
           Restyle(start, end);
@@ -76,10 +94,14 @@ CommentView::CommentView(ICaptureContext &ctx, QWidget *parent)
         if(m_ignoreModifications)
           return;
 
-        if(type & (SC_MOD_INSERTTEXT | SC_MOD_DELETETEXT | SC_MOD_BEFOREINSERT | SC_MOD_BEFOREDELETE))
+        if(FlagSet(type,
+                   MF::InsertText | MF::DeleteText
+                       | MF::BeforeInsert
+                       | MF::BeforeDelete))
         {
-          QString text =
-              QString::fromUtf8(m_commentsEditor->getText(m_commentsEditor->textLength() + 1));
+          QString text = QString::fromUtf8(
+              m_commentsEditor->getText(
+                  m_commentsEditor->textLength() + 1));
           text.remove(QLatin1Char('\r'));
           m_ignoreModifications = true;
           m_Ctx.SetNotes(lit("comments"), text);

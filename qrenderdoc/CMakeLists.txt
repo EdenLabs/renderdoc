@@ -391,14 +391,21 @@ if(APPLE AND CMAKE_GENERATOR STREQUAL "Xcode")
     list(SORT WINDOWS_FILES COMPARE FILE_BASENAME)
     list(APPEND QRD_XCODE_SOURCES ${WINDOWS_FILES})
 
-    file(GLOB_RECURSE THIRDPARTY_FILES 
-        3rdParty/toolwindowmanager/*.h
-        3rdParty/toolwindowmanager/*.cpp
-        3rdParty/flowlayout/*.h
-        3rdParty/flowlayout/*.cpp
-        3rdParty/scintilla/*.h
-        3rdParty/scintilla/*.cxx
-        3rdParty/scintilla/*.cpp)
+    file(GLOB_RECURSE THIRDPARTY_FILES
+        3rdparty/toolwindowmanager/*.h
+        3rdparty/toolwindowmanager/*.cpp
+        3rdparty/flowlayout/*.h
+        3rdparty/flowlayout/*.cpp
+        3rdparty/scintilla/src/*.h
+        3rdparty/scintilla/src/*.cxx
+        3rdparty/scintilla/include/*.h
+        3rdparty/scintilla/qt/ScintillaEditBase/*.h
+        3rdparty/scintilla/qt/ScintillaEditBase/*.cpp
+        3rdparty/lexilla/lexlib/*.h
+        3rdparty/lexilla/lexlib/*.cxx
+        3rdparty/lexilla/lexers/*.cxx
+        3rdparty/lexilla/src/*.cxx
+        3rdparty/lexilla/include/*.h)
     list(SORT THIRDPARTY_FILES COMPARE FILE_BASENAME)
     list(APPEND QRD_XCODE_SOURCES ${THIRDPARTY_FILES})
 

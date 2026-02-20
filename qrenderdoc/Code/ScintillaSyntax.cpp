@@ -24,7 +24,9 @@
 
 #include "ScintillaSyntax.h"
 #include "Code/QRDUtils.h"
-#include "scintilla/include/SciLexer.h"
+#include "ILexer.h"
+#include "Lexilla.h"
+#include "SciLexer.h"
 #include "scintilla/include/qt/ScintillaEdit.h"
 
 static const char *python_keywords =
@@ -341,10 +343,20 @@ void ConfigureSyntax(ScintillaEdit *scintilla, int language)
   bool glsl = false;
   int lexLang = language;
 
-  if(lexLang == SCLEX_HLSL || lexLang == SCLEX_GLSL || lexLang == SCLEX_BUFFER)
+  if(lexLang == SCLEX_HLSL || lexLang == SCLEX_GLSL ||
+     lexLang == SCLEX_BUFFER)
     lexLang = SCLEX_CPP;
 
-  scintilla->setLexer(lexLang);
+  // Map language ID to Lexilla lexer name.
+  const char *lexName = "null";
+  if(lexLang == SCLEX_CPP)
+    lexName = "cpp";
+  else if(lexLang == SCLEX_PYTHON)
+    lexName = "python";
+
+  Scintilla::ILexer5 *pLexer =
+      CreateLexer(lexName);
+  scintilla->setILexer((sptr_t)pLexer);
 
 #define SC_COL(qcol) SCINTILLA_COLOUR(qcol.red(), qcol.green(), qcol.blue())
 

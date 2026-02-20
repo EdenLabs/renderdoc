@@ -26,13 +26,14 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QContextMenuEvent>
-#include <QDesktopWidget>
+#include <QGuiApplication>
 #include <QHeaderView>
 #include <QLabel>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QProxyStyle>
+#include <QScreen>
 #include <QScrollBar>
 #include <QStack>
 #include <QStylePainter>
@@ -262,7 +263,11 @@ void RDTreeView::mouseMoveEvent(QMouseEvent *e)
 
           // estimate, as this is not easily queryable
           const QPoint cursorSize(16, 16);
-          const QRect screenAvailGeom = QApplication::desktop()->availableGeometry(p);
+          QScreen *screen = QGuiApplication::screenAt(p);
+          const QRect screenAvailGeom =
+              screen ? screen->availableGeometry()
+                     : QGuiApplication::primaryScreen()
+                           ->availableGeometry();
 
           // start with the tooltip placed bottom-right of the cursor, as the default
           QRect tooltipRect;

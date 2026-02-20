@@ -24,9 +24,13 @@
 
 #pragma once
 
-#define SCLEX_GLSL 1000
-#define SCLEX_HLSL 1001
-#define SCLEX_BUFFER 1002
+// Application-level language constants for branching.
+// These must not be passed to Scintilla directly.
+// Values start at 2000 to avoid collision with Lexilla's
+// SCLEX_AUTOMATIC (1000).
+#define SCLEX_GLSL 2000
+#define SCLEX_HLSL 2001
+#define SCLEX_BUFFER 2002
 
 #define SCINTILLA_COLOUR(r, g, b) (long(r) | (long(g) << 8) | (long(b) << 16))
 

@@ -33,10 +33,6 @@
 #include "Interface/QRDInterface.h"
 #include "ReplayManager.h"
 
-#if defined(RENDERDOC_PLATFORM_LINUX)
-#include <QX11Info>
-#endif
-
 class MainWindow;
 class EventBrowser;
 class APIInspector;

@@ -2672,7 +2672,7 @@ and these can be queried with a filter such as <code>$action(flags & Clear|Clear
       // split by whitespace)
       QStringList flagStrings;
       for(int i = 2; i < tokens.count(); i++)
-        flagStrings.append(tokens[i].text.split(QLatin1Char('|'), QString::KeepEmptyParts));
+        flagStrings.append(tokens[i].text.split(QLatin1Char('|'), Qt::KeepEmptyParts));
 
       // if we have an empty string in the list somewhere that means the | list was broken
       if(flagStrings.contains(QString()))

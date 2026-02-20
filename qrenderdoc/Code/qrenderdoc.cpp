@@ -39,35 +39,28 @@
 #include "Windows/MainWindow.h"
 #include "version.h"
 
-#if QT_VERSION >= QT_VERSION_CHECK(5, 9, 0)
-
 #include <QOperatingSystemVersion>
 
 QString getOSVersion()
 {
-  QOperatingSystemVersion ver = QOperatingSystemVersion::current();
+  QOperatingSystemVersion ver =
+      QOperatingSystemVersion::current();
 
-  if(ver.type() == QOperatingSystemVersion::Windows && ver.majorVersion() >= 10)
+  if(ver.type() == QOperatingSystemVersion::Windows
+     && ver.majorVersion() >= 10)
   {
     int major = ver.majorVersion();
     int build = ver.microVersion();
     if(build >= 22000)
       major = 11;
 
-    return QFormatStr("Windows %1 Build num %2").arg(major).arg(build);
+    return QFormatStr("Windows %1 Build num %2")
+        .arg(major)
+        .arg(build);
   }
 
   return QSysInfo::prettyProductName();
 }
-
-#else
-
-QString getOSVersion()
-{
-  return QSysInfo::prettyProductName();
-}
-
-#endif
 
 #if ENABLE_UNIT_TESTS
 
@@ -173,11 +166,7 @@ static QString tr(const char *string)
 
 void hideOption(QCommandLineOption &opt)
 {
-#if QT_VERSION >= QT_VERSION_CHECK(5, 8, 0)
   opt.setFlags(QCommandLineOption::HiddenFromHelp);
-#else
-  opt.setHidden(true);
-#endif
 }
 
 int main(int argc, char *argv[])
@@ -211,13 +200,8 @@ int main(int argc, char *argv[])
   }
 #endif
 
-  QGuiApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
-  QGuiApplication::setAttribute(Qt::AA_UseHighDpiPixmaps);
-
-#if(QT_VERSION >= QT_VERSION_CHECK(5, 14, 0))
   QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
       Qt::HighDpiScaleFactorRoundingPolicy::RoundPreferFloor);
-#endif
 
   QApplication::setApplicationVersion(lit(FULL_VERSION_STRING));
 
@@ -577,7 +561,12 @@ int main(int argc, char *argv[])
     {
       GlobalEnvironment env;
 #if defined(RENDERDOC_PLATFORM_LINUX)
-      env.xlibDisplay = QX11Info::display();
+      {
+        auto *x11App = qApp->nativeInterface<
+            QNativeInterface::QX11Application>();
+        env.xlibDisplay =
+            x11App ? x11App->display() : nullptr;
+      }
       if(QGuiApplication::platformName() == lit("wayland"))
       {
         env.waylandDisplay = (wl_display *)AccessWaylandPlatformInterface("display", NULL);

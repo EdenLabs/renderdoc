@@ -471,14 +471,23 @@ void ShaderViewer::editShader(ResourceId id, ShaderStage stage, const QString &e
     scintilla->setReadOnly(false);
     QObject::connect(scintilla, &ScintillaEdit::keyPressed, this, &ShaderViewer::editable_keyPressed);
 
-    QObject::connect(scintilla, &ScintillaEdit::modified,
-                     [this](int type, int, int, int, const QByteArray &, int, int, int) {
-                       if(type & (SC_MOD_INSERTTEXT | SC_MOD_DELETETEXT | SC_MOD_BEFOREINSERT |
-                                  SC_MOD_BEFOREDELETE))
-                         m_FindState = FindState();
+    QObject::connect(
+        scintilla, &ScintillaEdit::modified,
+        [this](Scintilla::ModificationFlags type,
+               Scintilla::Position, Scintilla::Position,
+               Scintilla::Position, const QByteArray &,
+               Scintilla::Position, Scintilla::FoldLevel,
+               Scintilla::FoldLevel) {
+          using Scintilla::FlagSet;
+          using MF = Scintilla::ModificationFlags;
+          if(FlagSet(type,
+                     MF::InsertText | MF::DeleteText
+                         | MF::BeforeInsert
+                         | MF::BeforeDelete))
+            m_FindState = FindState();
 
-                       MarkModification();
-                     });
+          MarkModification();
+        });
     QWidget *w = (QWidget *)scintilla;
     w->setProperty("filename", kv.first);
     w->setProperty("origText", kv.second);
@@ -6934,7 +6943,8 @@ void ShaderViewer::performFindAll()
   }
 }
 
-void ShaderViewer::resultsDoubleClick(int position, int line)
+void ShaderViewer::resultsDoubleClick(
+    Scintilla::Position position, Scintilla::Position line)
 {
   if(line >= 1 && line - 1 < m_FindAllResults.count())
   {

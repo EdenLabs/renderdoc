@@ -29,6 +29,7 @@
 #include <QSet>
 #include <QStyledItemDelegate>
 #include "Code/Interface/QRDInterface.h"
+#include "ScintillaTypes.h"
 
 namespace Ui
 {
@@ -208,7 +209,8 @@ private slots:
   void watch_keyPress(QKeyEvent *event);
   void performFind();
   void performFindAll();
-  void resultsDoubleClick(int position, int line);
+  void resultsDoubleClick(Scintilla::Position position,
+                          Scintilla::Position line);
   void performReplace();
   void performReplaceAll();
 
