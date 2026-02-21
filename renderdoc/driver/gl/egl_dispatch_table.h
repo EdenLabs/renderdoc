@@ -64,6 +64,9 @@ typedef EGLBoolean(EGLAPIENTRY *PFN_eglGetConfigAttrib)(EGLDisplay dpy, EGLConfi
 typedef const char *(EGLAPIENTRY *PFN_eglQueryString)(EGLDisplay dpy, EGLint name);
 typedef EGLBoolean(EGLAPIENTRY *PFN_eglQueryContext)(EGLDisplay dpy, EGLContext ctx,
                                                      EGLint attribute, EGLint *value);
+typedef EGLDisplay(EGLAPIENTRY *PFN_eglGetPlatformDisplayEXT)(EGLenum platform,
+                                                              void *native_display,
+                                                              const EGLint *attrib_list);
 typedef PFNEGLPOSTSUBBUFFERNVPROC PFN_eglPostSubBufferNV;
 typedef PFNEGLSWAPBUFFERSWITHDAMAGEEXTPROC PFN_eglSwapBuffersWithDamageEXT;
 typedef PFNEGLSWAPBUFFERSWITHDAMAGEKHRPROC PFN_eglSwapBuffersWithDamageKHR;
@@ -73,6 +76,7 @@ typedef PFNEGLSWAPBUFFERSWITHDAMAGEKHRPROC PFN_eglSwapBuffersWithDamageKHR;
   FUNC(GetProcAddress, false, true);               \
   FUNC(GetDisplay, false, true);                   \
   FUNC(GetPlatformDisplay, false, false);          \
+  FUNC(GetPlatformDisplayEXT, true, false);        \
   FUNC(CreateContext, false, true);                \
   FUNC(DestroyContext, false, true);               \
   FUNC(CreateWindowSurface, false, true);          \

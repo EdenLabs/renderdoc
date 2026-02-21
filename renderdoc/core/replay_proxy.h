@@ -187,6 +187,11 @@ public:
     if(m_Proxy)
       return m_Proxy->GetOutputWindowDimensions(id, w, h);
   }
+  void SetOutputWindowDimensions(uint64_t id, int32_t w, int32_t h)
+  {
+    if(m_Proxy)
+      m_Proxy->SetOutputWindowDimensions(id, w, h);
+  }
   void GetOutputWindowData(uint64_t id, bytebuf &retData)
   {
     if(m_Proxy)

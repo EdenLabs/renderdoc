@@ -257,6 +257,16 @@ the output data is not displayed anywhere natively.
 )");
   virtual rdcpair<int32_t, int32_t> GetDimensions() = 0;
 
+  DOCUMENT(R"(Notify the output of its current surface dimensions.
+
+Used for windowing systems like Wayland where the surface size cannot be queried on demand
+and must be pushed from the application when the surface is resized.
+
+:param int width: The new width of the output surface.
+:param int height: The new height of the output surface.
+)");
+  virtual void SetDimensions(int32_t width, int32_t height) = 0;
+
   DOCUMENT(
       "Clear and release all thumbnails associated with this output. See :meth:`AddThumbnail`.");
   virtual void ClearThumbnails() = 0;

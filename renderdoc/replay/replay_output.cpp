@@ -166,6 +166,11 @@ rdcpair<int32_t, int32_t> ReplayOutput::GetDimensions()
   return make_rdcpair(m_Width, m_Height);
 }
 
+void ReplayOutput::SetDimensions(int32_t width, int32_t height)
+{
+  m_pDevice->SetOutputWindowDimensions(m_MainOutput.outputID, width, height);
+}
+
 void ReplayOutput::SetTextureDisplay(const TextureDisplay &o)
 {
   CHECK_REPLAY_THREAD();

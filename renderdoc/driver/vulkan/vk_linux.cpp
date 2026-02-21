@@ -304,9 +304,21 @@ void VulkanReplay::GetOutputWindowDimensions(uint64_t id, int32_t &w, int32_t &h
 #if ENABLED(RDOC_WAYLAND)
   if(outw.m_WindowSystem == WindowingSystem::Wayland)
   {
-    RDCWARN("Need Wayland query for current surface dimensions");
-    w = RDCMAX(1U, outw.width);
-    h = RDCMAX(1U, outw.height);
+    // Wayland doesn't support querying surface dimensions on demand.
+    // The compositor communicates size via configure events, which we
+    // receive through the Qt widget's resizeEvent and store in the
+    // pending dimensions. Fall back to the current cached size if no
+    // pending dimensions have been set yet.
+    if(outw.pendingWidth > 0 && outw.pendingHeight > 0)
+    {
+      w = outw.pendingWidth;
+      h = outw.pendingHeight;
+    }
+    else
+    {
+      w = RDCMAX(1U, outw.width);
+      h = RDCMAX(1U, outw.height);
+    }
 
     return;
   }

@@ -4,7 +4,7 @@
 #
 #-------------------------------------------------
 
-QT       += core gui widgets svg network core5compat
+QT       += core gui gui-private widgets svg network core5compat
 
 CONFIG   += silent
 

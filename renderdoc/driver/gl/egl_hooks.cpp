@@ -183,21 +183,31 @@ HOOK_EXPORT EGLDisplay EGLAPIENTRY eglGetDisplay_renderdoc_hooked(EGLNativeDispl
 
   EnsureRealLibraryLoaded();
 
+  WindowingSystem detectedSystem = WindowingSystem::Unknown;
+
 #if ENABLED(RDOC_LINUX)
 
   // display can be EGL_DEFAULT_DISPLAY which is NULL, and unfortunately we don't have anything then
   if(display)
-    Keyboard::UseUnknownDisplay((void *)display);
+    detectedSystem = Keyboard::UseUnknownDisplay((void *)display);
 
 // if xlib is compiled we can try to get the default display (which is what this will do)
 #if ENABLED(RDOC_XLIB)
   else
-    Keyboard::UseUnknownDisplay(XOpenDisplay(NULL));
+    detectedSystem = Keyboard::UseUnknownDisplay(XOpenDisplay(NULL));
 #endif
 
 #endif
 
-  return EGL.GetDisplay(display);
+  EGLDisplay ret = EGL.GetDisplay(display);
+
+  if(ret)
+  {
+    SCOPED_LOCK(glLock);
+    eglhook.displays[ret] = {detectedSystem};
+  }
+
+  return ret;
 }
 
 HOOK_EXPORT EGLDisplay EGLAPIENTRY eglGetPlatformDisplay_renderdoc_hooked(EGLenum platform,
@@ -214,16 +224,82 @@ HOOK_EXPORT EGLDisplay EGLAPIENTRY eglGetPlatformDisplay_renderdoc_hooked(EGLenu
 
   EnsureRealLibraryLoaded();
 
+  WindowingSystem detectedSystem = WindowingSystem::Unknown;
+
 #if ENABLED(RDOC_LINUX)
   if(platform == EGL_PLATFORM_X11_KHR)
+  {
     Keyboard::UseXlibDisplay((Display *)native_display);
+    detectedSystem = WindowingSystem::Xlib;
+  }
+#if ENABLED(RDOC_WAYLAND)
   else if(platform == EGL_PLATFORM_WAYLAND_KHR)
+  {
     Keyboard::UseWaylandDisplay((wl_display *)native_display);
+    detectedSystem = WindowingSystem::Wayland;
+  }
+#endif
   else
+  {
     RDCWARN("Unknown platform %x in eglGetPlatformDisplay", platform);
+  }
 #endif
 
-  return EGL.GetPlatformDisplay(platform, native_display, attrib_list);
+  EGLDisplay ret = EGL.GetPlatformDisplay(platform, native_display, attrib_list);
+
+  if(ret)
+  {
+    SCOPED_LOCK(glLock);
+    eglhook.displays[ret] = {detectedSystem};
+  }
+
+  return ret;
+}
+
+HOOK_EXPORT EGLDisplay EGLAPIENTRY eglGetPlatformDisplayEXT_renderdoc_hooked(EGLenum platform,
+                                                                              void *native_display,
+                                                                              const EGLint *attrib_list)
+{
+  if(RenderDoc::Inst().IsReplayApp())
+  {
+    if(!EGL.GetPlatformDisplayEXT)
+      EGL.PopulateForReplay();
+
+    return EGL.GetPlatformDisplayEXT(platform, native_display, attrib_list);
+  }
+
+  EnsureRealLibraryLoaded();
+
+  WindowingSystem detectedSystem = WindowingSystem::Unknown;
+
+#if ENABLED(RDOC_LINUX)
+  if(platform == EGL_PLATFORM_X11_KHR)
+  {
+    Keyboard::UseXlibDisplay((Display *)native_display);
+    detectedSystem = WindowingSystem::Xlib;
+  }
+#if ENABLED(RDOC_WAYLAND)
+  else if(platform == EGL_PLATFORM_WAYLAND_KHR)
+  {
+    Keyboard::UseWaylandDisplay((wl_display *)native_display);
+    detectedSystem = WindowingSystem::Wayland;
+  }
+#endif
+  else
+  {
+    RDCWARN("Unknown platform %x in eglGetPlatformDisplayEXT", platform);
+  }
+#endif
+
+  EGLDisplay ret = EGL.GetPlatformDisplayEXT(platform, native_display, attrib_list);
+
+  if(ret)
+  {
+    SCOPED_LOCK(glLock);
+    eglhook.displays[ret] = {detectedSystem};
+  }
+
+  return ret;
 }
 
 HOOK_EXPORT EGLBoolean EGLAPIENTRY eglBindAPI_renderdoc_hooked(EGLenum api)
@@ -776,6 +852,12 @@ HOOK_EXPORT EGLDisplay EGLAPIENTRY eglGetPlatformDisplay(EGLenum platform, void 
                                                          const EGLAttrib *attrib_list)
 {
   return eglGetPlatformDisplay_renderdoc_hooked(platform, native_display, attrib_list);
+}
+
+HOOK_EXPORT EGLDisplay EGLAPIENTRY eglGetPlatformDisplayEXT(EGLenum platform, void *native_display,
+                                                             const EGLint *attrib_list)
+{
+  return eglGetPlatformDisplayEXT_renderdoc_hooked(platform, native_display, attrib_list);
 }
 
 HOOK_EXPORT EGLContext EGLAPIENTRY eglCreateContext(EGLDisplay display, EGLConfig config,

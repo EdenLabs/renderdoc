@@ -107,6 +107,7 @@ private:
   void RecreateInternalWidget();
   void renderInternal(QPaintEvent *e);
   void paintInternal(QPaintEvent *e);
+  void resizeInternal(QResizeEvent *e);
 
   ICaptureContext *m_Ctx = NULL;
   IReplayOutput *m_Output = NULL;

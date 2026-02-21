@@ -382,6 +382,7 @@ public:
   void DestroyOutputWindow(uint64_t id);
   bool CheckResizeOutputWindow(uint64_t id);
   void GetOutputWindowDimensions(uint64_t id, int32_t &w, int32_t &h);
+  void SetOutputWindowDimensions(uint64_t id, int32_t w, int32_t h);
   void GetOutputWindowData(uint64_t id, bytebuf &retData);
   void ClearOutputWindowColor(uint64_t id, FloatVector col);
   void ClearOutputWindowDepth(uint64_t id, float depth, uint8_t stencil);
@@ -586,6 +587,11 @@ private:
     bool outofdate = false;
 
     uint32_t width, height;
+
+    // Pending dimensions set from the UI thread for windowing systems
+    // (like Wayland) that don't support on-demand size queries.
+    // Written by the UI thread, read by the replay thread.
+    int32_t pendingWidth = 0, pendingHeight = 0;
 
     bool hasDepth;
 

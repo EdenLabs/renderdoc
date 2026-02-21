@@ -276,7 +276,13 @@ bool HasXCBInput()
 
 #include <wayland-client.h>
 
-std::set<wl_display *> displays;
+struct WaylandDisplayState
+{
+  wl_event_queue *queue = NULL;
+  wl_registry *registry = NULL;
+};
+
+std::map<wl_display *, WaylandDisplayState> displays;
 std::set<wl_surface *> surfaces;
 std::map<rdcpair<wl_registry *, uint32_t>, wl_seat *> seatNames;
 std::map<wl_seat *, wl_keyboard *> seatKeyboard;
@@ -398,6 +404,8 @@ void WaylandKeypress(void *data, wl_keyboard *keyboard, uint32_t serial, uint32_
 
 void WaylandSeatCaps(void *data, wl_seat *seat, uint32_t capabilities)
 {
+  wl_event_queue *queue = (wl_event_queue *)data;
+
   if(capabilities & WL_SEAT_CAPABILITY_KEYBOARD)
   {
     {
@@ -407,6 +415,12 @@ void WaylandSeatCaps(void *data, wl_seat *seat, uint32_t capabilities)
     }
 
     wl_keyboard *keyboard = wl_seat_get_keyboard(seat);
+
+    // Assign the keyboard proxy to our dedicated queue so events
+    // are delivered even if the app never dispatches the default queue.
+    if(queue)
+      wl_proxy_set_queue((wl_proxy *)keyboard, queue);
+
     static const wl_keyboard_listener listener = {
         WaylandKeymapDummy, WaylandEnter,          WaylandLeave,
         WaylandKeypress,    WaylandModifiersDummy, WaylandRepeatInfoDummy,
@@ -441,9 +455,17 @@ void WaylandRegistryAdd(void *data, wl_registry *reg, uint32_t name, const char 
 {
   if(!strcmp(iface, "wl_seat"))
   {
+    // data carries our wl_event_queue for this display.
+    wl_event_queue *queue = (wl_event_queue *)data;
+
     wl_seat *seat = (wl_seat *)wl_registry_bind(reg, name, &wl_seat_interface, 1);
+
+    // Assign the seat proxy to our dedicated queue.
+    if(queue)
+      wl_proxy_set_queue((wl_proxy *)seat, queue);
+
     static const wl_seat_listener listener = {&WaylandSeatCaps};
-    wl_seat_add_listener(seat, &listener, NULL);
+    wl_seat_add_listener(seat, &listener, queue);
 
     {
       SCOPED_LOCK(waylandLock);
@@ -470,13 +492,30 @@ void UseWaylandDisplay(wl_display *disp)
     SCOPED_LOCK(waylandLock);
     if(displays.find(disp) != displays.end())
       return;
-    displays.insert(disp);
   }
+
+  // Create a dedicated event queue so RenderDoc receives keyboard events
+  // even if the application never dispatches the default Wayland queue.
+  // This is the case for pure Vulkan apps that use VK_KHR_wayland_surface
+  // without a libwayland event loop.
+  wl_event_queue *queue = wl_display_create_queue(disp);
 
   static const wl_registry_listener listener = {&WaylandRegistryAdd, &WaylandRegistryRemove};
 
-  // get the registry and listen to it. This will then let us find seats
-  wl_registry_add_listener(wl_display_get_registry(disp), &listener, NULL);
+  // Get the registry and assign it to our dedicated queue.
+  wl_registry *reg = wl_display_get_registry(disp);
+  wl_proxy_set_queue((wl_proxy *)reg, queue);
+  wl_registry_add_listener(reg, &listener, queue);
+
+  // Two roundtrips: the first discovers registry globals (seats),
+  // the second processes seat capabilities (keyboards).
+  wl_display_roundtrip_queue(disp, queue);
+  wl_display_roundtrip_queue(disp, queue);
+
+  {
+    SCOPED_LOCK(waylandLock);
+    displays[disp] = {queue, reg};
+  }
 }
 
 void AddWaylandInputWindow(wl_surface *wnd)
@@ -499,6 +538,43 @@ bool HasWaylandInput()
 
 bool GetWaylandKeyState(int key)
 {
+  // Collect display/queue pairs under the lock, then dispatch outside
+  // it. The dispatch callbacks (WaylandKeypress, etc.) acquire
+  // waylandLock themselves, so we must not hold it here.
+  rdcarray<rdcpair<wl_display *, wl_event_queue *>> queues;
+
+  {
+    SCOPED_LOCK(waylandLock);
+    for(auto &it : displays)
+    {
+      if(it.second.queue)
+        queues.push_back({it.first, it.second.queue});
+    }
+  }
+
+  // Pump our dedicated event queues so keyboard callbacks fire even
+  // when the application does not dispatch the default Wayland queue.
+  for(auto &q : queues)
+  {
+    wl_display *disp = q.first;
+    wl_event_queue *queue = q.second;
+
+    // Try to read new events from the wire into our queue.
+    if(wl_display_prepare_read_queue(disp, queue) == 0)
+    {
+      wl_display_flush(disp);
+      // read_events is non-blocking w.r.t. the fd; it reads whatever
+      // bytes are available. It may briefly synchronize with other
+      // threads that are also in a prepare/read cycle.
+      if(wl_display_read_events(disp) < 0)
+      {
+        // Read failed (e.g. display disconnected), nothing to do.
+      }
+    }
+
+    wl_display_dispatch_queue_pending(disp, queue);
+  }
+
   SCOPED_LOCK(waylandLock);
   return keyState[key];
 }

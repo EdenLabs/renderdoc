@@ -27,6 +27,7 @@
 #include <QEvent>
 #include <QPainter>
 #include <QPointer>
+#include <QResizeEvent>
 #include <QVBoxLayout>
 #include "Code/Interface/QRDInterface.h"
 #include "Code/QRDUtils.h"
@@ -195,6 +196,14 @@ void CustomPaintWidget::paintInternal(QPaintEvent *e)
   }
 }
 
+void CustomPaintWidget::resizeInternal(QResizeEvent *e)
+{
+  // Push the new surface dimensions to the replay output so that windowing
+  // systems without on-demand size queries (e.g. Wayland) can detect resizes.
+  if(m_Output)
+    m_Output->SetDimensions(e->size().width(), e->size().height());
+}
+
 void CustomPaintWidgetInternal::mousePressEvent(QMouseEvent *e)
 {
   emit m_Custom.clicked(e);
@@ -222,6 +231,7 @@ void CustomPaintWidgetInternal::wheelEvent(QWheelEvent *e)
 
 void CustomPaintWidgetInternal::resizeEvent(QResizeEvent *e)
 {
+  m_Custom.resizeInternal(e);
   emit m_Custom.resize(e);
 }
 

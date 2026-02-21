@@ -1055,8 +1055,6 @@ void TruncateStringFromEnd(QString &name);
 float getLuminance(const QColor &col);
 QColor contrastingColor(const QColor &col, const QColor &defaultCol);
 
-void *AccessWaylandPlatformInterface(const QByteArray &resource, QWindow *window);
-
 void UpdateVisibleColumns(rdcstr windowTitle, int columnCount, QHeaderView *header,
                           const QStringList &headers);
 

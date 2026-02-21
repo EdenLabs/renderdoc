@@ -66,6 +66,13 @@
 #include "RGPInterop.h"
 #include "version.h"
 
+// Private Qt API for retrieving the wl_surface from a QWindow on Wayland.
+// This is part of QNativeInterface::Private and may change between Qt6 minor
+// versions. Used only when running under the Wayland Qt platform.
+#if defined(RENDERDOC_PLATFORM_LINUX)
+#include <QtGui/qpa/qplatformwindow_p.h>
+#endif
+
 #include "pipestate.inl"
 
 CaptureContext::CaptureContext(PersistantConfig &cfg) : m_Config(cfg)
@@ -1025,7 +1032,11 @@ void CaptureContext::LoadCaptureThreaded(const QString &captureFile, const Repla
         if(sys == WindowingSystem::Wayland)
         {
           m_CurWinSystem = WindowingSystem::Wayland;
-          m_WaylandDisplay = (wl_display *)AccessWaylandPlatformInterface("display", NULL);
+          auto *waylandApp =
+              qApp->nativeInterface<
+                  QNativeInterface::QWaylandApplication>();
+          if(waylandApp)
+            m_WaylandDisplay = waylandApp->display();
           break;
         }
       }
@@ -2206,11 +2217,23 @@ WindowingData CaptureContext::CreateWindowingData(QWidget *window)
 
   if(m_CurWinSystem == WindowingSystem::Wayland)
   {
-    // we don't need this, we just need to force creation of a window handle
+    // Force creation of a window handle so the platform window exists.
     window->winId();
-    wl_surface *surface =
-        (wl_surface *)AccessWaylandPlatformInterface("surface", window->windowHandle());
-    return CreateWaylandWindowingData(m_WaylandDisplay, surface);
+
+    // QNativeInterface::Private::QWaylandWindow is a private Qt API.
+    // It may change between Qt6 minor versions but is currently the
+    // supported way to retrieve the underlying wl_surface.
+    auto *waylandWindow =
+        window->windowHandle()->nativeInterface<
+            QNativeInterface::Private::QWaylandWindow>();
+    if(waylandWindow)
+    {
+      wl_surface *surface = waylandWindow->surface();
+      return CreateWaylandWindowingData(m_WaylandDisplay, surface);
+    }
+
+    qCritical() << "Failed to get QWaylandWindow native interface";
+    return CreateHeadlessWindowingData(1, 1);
   }
   else if(m_CurWinSystem == WindowingSystem::XCB)
   {

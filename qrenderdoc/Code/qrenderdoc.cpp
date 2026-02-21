@@ -186,11 +186,12 @@ int main(int argc, char *argv[])
   if(IsRunningAsAdmin())
     qInfo() << "Running as administrator";
 
-#if defined(RENDERDOC_PLATFORM_LINUX) && !defined(RENDERDOC_WINDOWING_WAYLAND)
+#if defined(RENDERDOC_PLATFORM_LINUX) && !defined(RENDERDOC_WAYLAND_UI)
   bool envChanged = false;
   {
     const char *qpa_plat = getenv("QT_QPA_PLATFORM");
-    // if not set or empty, force non-wayland to help go through backwards compatibility path on wayland.
+    // if not set or empty, force xcb to avoid running under Wayland
+    // without explicit opt-in via RENDERDOC_WAYLAND_UI.
     if(!qpa_plat || qpa_plat[0] == 0)
     {
       setenv("QT_QPA_PLATFORM", "xcb", 1);
@@ -568,17 +569,11 @@ int main(int argc, char *argv[])
       }
       if(QGuiApplication::platformName() == lit("wayland"))
       {
-        env.waylandDisplay = (wl_display *)AccessWaylandPlatformInterface("display", NULL);
-
-        QString warning =
-            tr("Running directly on Wayland is NOT SUPPORTED and is likely to crash, hang, or "
-               "fail to render.");
-
-        qInfo() << "------ !!!! WARNING !!!! ------";
-        qInfo() << warning;
-        qInfo() << "------ !!!! WARNING !!!! ------";
-
-        RDDialog::critical(NULL, tr("Wayland Qt platform not supported"), warning);
+        auto *waylandApp =
+            qApp->nativeInterface<
+                QNativeInterface::QWaylandApplication>();
+        if(waylandApp)
+          env.waylandDisplay = waylandApp->display();
       }
 #endif
       rdcarray<rdcstr> coreargs;
@@ -594,7 +589,7 @@ int main(int argc, char *argv[])
       RENDERDOC_InitialiseReplay(env, coreargs);
     }
 
-#if defined(RENDERDOC_PLATFORM_LINUX) && !defined(RENDERDOC_WINDOWING_WAYLAND)
+#if defined(RENDERDOC_PLATFORM_LINUX) && !defined(RENDERDOC_WAYLAND_UI)
     if(envChanged)
       unsetenv("QT_QPA_PLATFORM");
 #endif
