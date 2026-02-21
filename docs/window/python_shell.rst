@@ -16,7 +16,7 @@ The full :doc:`python API reference <../python_api/index>` contains the explicit
 
 To get started the :code:`pyrenderdoc` object corresponds to a :py:class:`qrenderdoc.CaptureContext` object through which the internal API and UI windows can be obtained.
 
-For Qt integration, if available, you can import :code:`PySide2` which provides python bindings for the Qt API.
+For Qt integration, if available, you can import :code:`PySide6` which provides python bindings for the Qt API.
 
 See Also
 --------

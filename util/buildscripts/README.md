@@ -27,7 +27,7 @@ The output files will be placed in a `package` subfolder under the root.
 
 Some extra files can be used, see the `support` subfolder. Also https://renderdoc.org/plugins.zip contains the windows plugins, and https://renderdoc.org/plugins.tgz contains the linux plugins. Extracting these in the root of the repository will be included in the package builds.
 
-On windows PySide2 can be included with the Qt build by extracting https://renderdoc.org/qrenderdoc_3rdparty.zip in the root.
+On windows PySide6 can be included with the Qt build by extracting https://renderdoc.org/qrenderdoc_3rdparty.zip in the root.
 
 For windows to build installers, all these extras must be present.
 

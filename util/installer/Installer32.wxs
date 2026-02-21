@@ -132,7 +132,7 @@
             <File Id='Python36' Name='python36.dll' DiskId='1' Source='dist/Release32/python36.dll' KeyPath='yes' />
             <File Id='PythonLibsZIP' Name='python36.zip' DiskId='1' Source='dist/Release32/python36.zip' />
             <File Id='CTypes' Name='_ctypes.pyd' DiskId='1' Source='dist/Release32/_ctypes.pyd' />
-            <File Id='Shiboken2' Name='shiboken2.dll' DiskId='1' Source='dist/Release32/shiboken2.dll' />
+            <File Id='Shiboken6' Name='shiboken6.dll' DiskId='1' Source='dist/Release32/shiboken6.dll' />
           </Component>
 
           <Component Id='Documentation' Guid='CD32B446-6DC1-49E4-8FE9-509E1AFB126D'>
@@ -155,14 +155,14 @@
             </Directory>
           </Directory>
 
-          <Directory Id='PySide2' Name='PySide2'>
-            <Component Id='PySide2Deps' Guid='C5ECF5CC-2424-48D9-8194-F8E0348882A8'>
-              <File Id='pyside2dll' Name='pyside2.dll' DiskId='1' Source='dist/Release32/PySide2/pyside2.dll' KeyPath='yes' />
-              <File Id='PS2QtCore' Name='QtCore.pyd' DiskId='1' Source='dist/Release32/PySide2/QtCore.pyd' />
-              <File Id='PS2QtGui' Name='QtGui.pyd' DiskId='1' Source='dist/Release32/PySide2/QtGui.pyd' />
-              <File Id='PS2QtWidgets' Name='QtWidgets.pyd' DiskId='1' Source='dist/Release32/PySide2/QtWidgets.pyd' />
-              <File Id='PS2utils' Name='_utils.py' DiskId='1' Source='dist/Release32/PySide2/_utils.py' />
-              <File Id='PS2init' Name='__init__.py' DiskId='1' Source='dist/Release32/PySide2/__init__.py' />
+          <Directory Id='PySide6' Name='PySide6'>
+            <Component Id='PySide6Deps' Guid='C5ECF5CC-2424-48D9-8194-F8E0348882A8'>
+              <File Id='pyside6dll' Name='pyside6.dll' DiskId='1' Source='dist/Release32/PySide6/pyside6.dll' KeyPath='yes' />
+              <File Id='PS6QtCore' Name='QtCore.pyd' DiskId='1' Source='dist/Release32/PySide6/QtCore.pyd' />
+              <File Id='PS6QtGui' Name='QtGui.pyd' DiskId='1' Source='dist/Release32/PySide6/QtGui.pyd' />
+              <File Id='PS6QtWidgets' Name='QtWidgets.pyd' DiskId='1' Source='dist/Release32/PySide6/QtWidgets.pyd' />
+              <File Id='PS6utils' Name='_utils.py' DiskId='1' Source='dist/Release32/PySide6/_utils.py' />
+              <File Id='PS6init' Name='__init__.py' DiskId='1' Source='dist/Release32/PySide6/__init__.py' />
             </Component>
           </Directory>
 
@@ -355,7 +355,7 @@
         <ComponentRef Id='qt_imgplugin' />
         <ComponentRef Id='qt_platplugin' />
 
-        <ComponentRef Id='PySide2Deps' />
+        <ComponentRef Id='PySide6Deps' />
 
         <ComponentRef Id='LICENSE' />
 

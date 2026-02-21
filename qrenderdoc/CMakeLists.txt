@@ -192,8 +192,8 @@ ExternalProject_Add(custom_swig
     BUILD_COMMAND ${GENERATOR_MAKE} ${GENERATOR_MAKE_PARAMS} > /dev/null 2>&1
     INSTALL_COMMAND ${GENERATOR_MAKE} install > /dev/null 2>&1)
 
-find_package(Shiboken2 QUIET)
-find_package(PySide2 QUIET)
+find_package(Shiboken6 QUIET)
+find_package(PySide6 QUIET)
 
 set(PYTHON_LINK "${PYTHON_LIBRARY}")
 
@@ -269,11 +269,10 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 
-if(ENABLE_UNSUPPORTED_EXPERIMENTAL_POSSIBLY_BROKEN_WAYLAND)
-    message(WARNING "!!!! Using the Wayland Qt platform in qrenderdoc is NOT SUPPORTED !!!!")
+if(ENABLE_WAYLAND_UI)
     file(APPEND
         ${CMAKE_BINARY_DIR}/qrenderdoc/qrenderdoc_cmake.pri
-        "DEFINES+=RENDERDOC_WINDOWING_WAYLAND\n")
+        "DEFINES+=RENDERDOC_WAYLAND_UI\n")
 endif()
 
 # propagate build version info. Lots of escaping needed here to pass ""s into the define value
@@ -301,45 +300,45 @@ if(NOT BUILD_VERSION_DIST_CONTACT STREQUAL "")
          "DEFINES+=DISTRIBUTION_CONTACT='\\\\\"${BUILD_VERSION_DIST_CONTACT}\\\\\"'\n")
 endif()
 
-option(QRENDERDOC_ENABLE_PYSIDE2 "Enable PySide2 if found" ON)
+option(QRENDERDOC_ENABLE_PYSIDE6 "Enable PySide6 if found" ON)
 
-if(NOT QRENDERDOC_ENABLE_PYSIDE2)
-    message(STATUS "PySide2 integration disabled")
-elseif(PySide2_FOUND AND Shiboken2_FOUND AND TARGET Shiboken2::libshiboken AND TARGET PySide2::pyside2)
-    message(STATUS "Building with PySide2 ${PySide2_VERSION} from ${PySide2_DIR}")
+if(NOT QRENDERDOC_ENABLE_PYSIDE6)
+    message(STATUS "PySide6 integration disabled")
+elseif(PySide6_FOUND AND Shiboken6_FOUND AND TARGET Shiboken6::libshiboken AND TARGET PySide6::pyside6)
+    message(STATUS "Building with PySide6 ${PySide6_VERSION} from ${PySide6_DIR}")
 
     if(NOT PYTHONLIBS_VERSION_STRING MATCHES "${SHIBOKEN_PYTHON_VERSION_MAJOR}.${SHIBOKEN_PYTHON_VERSION_MINOR}")
-        message(FATAL_ERROR "Shiboken2 that we found was linked against python ${SHIBOKEN_PYTHON_VERSION_MAJOR}.${SHIBOKEN_PYTHON_VERSION_MINOR} but the python library we're linking against is ${PYTHONLIBS_VERSION_STRING}. Ensure these versions are identical or disable PySide2 compilation with QRENDERDOC_ENABLE_PYSIDE2.")
+        message(FATAL_ERROR "Shiboken6 that we found was linked against python ${SHIBOKEN_PYTHON_VERSION_MAJOR}.${SHIBOKEN_PYTHON_VERSION_MINOR} but the python library we're linking against is ${PYTHONLIBS_VERSION_STRING}. Ensure these versions are identical or disable PySide6 compilation with QRENDERDOC_ENABLE_PYSIDE6.")
     endif()
 
-    get_target_property(SHIBOKEN2_INCLUDE_DIRS Shiboken2::libshiboken INTERFACE_INCLUDE_DIRECTORIES)
-    get_target_property(PYSIDE2_INCLUDE_DIRS PySide2::pyside2 INTERFACE_INCLUDE_DIRECTORIES)
+    get_target_property(SHIBOKEN6_INCLUDE_DIRS Shiboken6::libshiboken INTERFACE_INCLUDE_DIRECTORIES)
+    get_target_property(PYSIDE6_INCLUDE_DIRS PySide6::pyside6 INTERFACE_INCLUDE_DIRECTORIES)
 
     # append each include dir
-    foreach(DIR ${SHIBOKEN2_INCLUDE_DIRS})
+    foreach(DIR ${SHIBOKEN6_INCLUDE_DIRS})
         file(APPEND
              ${CMAKE_BINARY_DIR}/qrenderdoc/qrenderdoc_cmake.pri
              "INCLUDEPATH+=${DIR}\n")
     endforeach()
 
-    foreach(DIR ${PYSIDE2_INCLUDE_DIRS})
+    foreach(DIR ${PYSIDE6_INCLUDE_DIRS})
         file(APPEND
              ${CMAKE_BINARY_DIR}/qrenderdoc/qrenderdoc_cmake.pri
              "INCLUDEPATH+=${DIR}\n")
     endforeach()
 
-    # Add configuration for PySide2
+    # Add configuration for PySide6
     file(APPEND
          ${CMAKE_BINARY_DIR}/qrenderdoc/qrenderdoc_cmake.pri
-         "DEFINES+=PYSIDE2_ENABLED=1\n"
-         "DEFINES+=PYSIDE2_SYS_PATH=${PYSIDE_PYTHONPATH}\n"
-         "LIBS+=-lshiboken2${SHIBOKEN_PYTHON_SHARED_LIBRARY_SUFFIX}\n")
+         "DEFINES+=PYSIDE6_ENABLED=1\n"
+         "DEFINES+=PYSIDE6_SYS_PATH=${PYSIDE_PYTHONPATH}\n"
+         "LIBS+=-lshiboken6${SHIBOKEN_PYTHON_SHARED_LIBRARY_SUFFIX}\n")
 else()
-    message(STATUS "PySide2 not found - Qt will not be accessible in python scripting. See https://github.com/baldurk/renderdoc/wiki/PySide2")
+    message(STATUS "PySide6 not found - Qt will not be accessible in python scripting. See https://github.com/baldurk/renderdoc/wiki/PySide6")
 
     file(APPEND
          ${CMAKE_BINARY_DIR}/qrenderdoc/qrenderdoc_cmake.pri
-         "DEFINES+=PYSIDE2_ENABLED=0\n")
+         "DEFINES+=PYSIDE6_ENABLED=0\n")
 endif()
 
 # generate the SWIG interface files

@@ -36,22 +36,22 @@
 #define slots
 #endif
 
-#if PYSIDE2_ENABLED
+#if PYSIDE6_ENABLED
 // PySide Qt integration, must be included before Qt headers
 // warning C4522: 'Shiboken::AutoDecRef': multiple assignment operators specified
 #pragma warning(disable : 4522)
 #include <pyside.h>
 #include <shiboken.h>
 
-PyTypeObject **SbkPySide2_QtCoreTypes = NULL;
-PyTypeObject **SbkPySide2_QtGuiTypes = NULL;
-PyTypeObject **SbkPySide2_QtWidgetsTypes = NULL;
+PyTypeObject **SbkPySide6_QtCoreTypes = NULL;
+PyTypeObject **SbkPySide6_QtGuiTypes = NULL;
+PyTypeObject **SbkPySide6_QtWidgetsTypes = NULL;
 #else
 
 // for non-windows, this message is displayed at CMake time.
 #ifdef _MSC_VER
 #pragma message( \
-    "Building without PySide2 - Qt will not be accessible in python scripting. See https://github.com/baldurk/renderdoc/wiki/PySide2")
+    "Building without PySide6 - Qt will not be accessible in python scripting. See https://github.com/baldurk/renderdoc/wiki/PySide6")
 #endif
 
 #endif
@@ -348,8 +348,8 @@ void PythonContext::GlobalInit()
     output->block = false;
   }
 
-// if we need to append to sys.path to locate PySide2, do that now
-#if defined(PYSIDE2_SYS_PATH)
+// if we need to append to sys.path to locate PySide6, do that now
+#if defined(PYSIDE6_SYS_PATH)
   {
     PyObject *syspath = PyObject_SafeGetAttrString(sysobj, "path");
 
@@ -361,7 +361,7 @@ void PythonContext::GlobalInit()
 #define STRINGIZE(a) STRINGIZE2(a)
 #endif
 
-    PyObject *str = PyUnicode_FromString(STRINGIZE(PYSIDE2_SYS_PATH));
+    PyObject *str = PyUnicode_FromString(STRINGIZE(PYSIDE6_SYS_PATH));
 
     PyList_Append(syspath, str);
 
@@ -396,33 +396,25 @@ void PythonContext::GlobalInit()
 #endif
 
 // set up PySide
-#if PYSIDE2_ENABLED
+#if PYSIDE6_ENABLED
   {
-// hack for win32 builds, where our pyside2 accidentally depends on Qt5Qml.dll for no good
-// reason and we ship a stub to allow the dll to load instead of rebuilding the whole of pyside2
-// :S
-#if defined(_MSC_VER) && !defined(_M_X64)
-    QString Qt5QmlStub = QApplication::applicationDirPath() + lit("/PySide2/Qt5Qml.dll");
-    LoadLibraryA(Qt5QmlStub.toUtf8().data());
-#endif
-
-    Shiboken::AutoDecRef core(Shiboken::Module::import("PySide2.QtCore"));
+    Shiboken::AutoDecRef core(Shiboken::Module::import("PySide6.QtCore"));
     if(!core.isNull())
-      SbkPySide2_QtCoreTypes = Shiboken::Module::getTypes(core);
+      SbkPySide6_QtCoreTypes = Shiboken::Module::getTypes(core);
     else
-      qCritical() << "Failed to load PySide2.QtCore";
+      qCritical() << "Failed to load PySide6.QtCore";
 
-    Shiboken::AutoDecRef gui(Shiboken::Module::import("PySide2.QtGui"));
+    Shiboken::AutoDecRef gui(Shiboken::Module::import("PySide6.QtGui"));
     if(!gui.isNull())
-      SbkPySide2_QtGuiTypes = Shiboken::Module::getTypes(gui);
+      SbkPySide6_QtGuiTypes = Shiboken::Module::getTypes(gui);
     else
-      qCritical() << "Failed to load PySide2.QtGui";
+      qCritical() << "Failed to load PySide6.QtGui";
 
-    Shiboken::AutoDecRef widgets(Shiboken::Module::import("PySide2.QtWidgets"));
+    Shiboken::AutoDecRef widgets(Shiboken::Module::import("PySide6.QtWidgets"));
     if(!widgets.isNull())
-      SbkPySide2_QtWidgetsTypes = Shiboken::Module::getTypes(widgets);
+      SbkPySide6_QtWidgetsTypes = Shiboken::Module::getTypes(widgets);
     else
-      qCritical() << "Failed to load PySide2.QtWidgets";
+      qCritical() << "Failed to load PySide6.QtWidgets";
   }
 #endif
 
@@ -1073,14 +1065,14 @@ void PythonContext::setGlobal(const char *varName, QWidget *object)
 
 QWidget *PythonContext::QWidgetFromPy(PyObject *widget)
 {
-#if PYSIDE2_ENABLED
+#if PYSIDE6_ENABLED
   if(!initialised())
     return NULL;
 
   if(Py_IsNone(widget) || widget == NULL)
     return NULL;
 
-  if(!SbkPySide2_QtCoreTypes || !SbkPySide2_QtGuiTypes || !SbkPySide2_QtWidgetsTypes)
+  if(!SbkPySide6_QtCoreTypes || !SbkPySide6_QtGuiTypes || !SbkPySide6_QtWidgetsTypes)
     return UnwrapBareQWidget(widget);
 
   if(!Shiboken::Object::checkType(widget))
@@ -1168,11 +1160,11 @@ QStringList PythonContext::completionOptions(QString base)
 
 PyObject *PythonContext::QtObjectToPython(const char *typeName, QObject *object)
 {
-#if PYSIDE2_ENABLED
+#if PYSIDE6_ENABLED
   if(!initialised())
     Py_RETURN_NONE;
 
-  if(!SbkPySide2_QtCoreTypes || !SbkPySide2_QtGuiTypes || !SbkPySide2_QtWidgetsTypes)
+  if(!SbkPySide6_QtCoreTypes || !SbkPySide6_QtGuiTypes || !SbkPySide6_QtWidgetsTypes)
   {
     QWidget *w = qobject_cast<QWidget *>(object);
     if(w)
