@@ -40,6 +40,11 @@
 #include <X11/Xlib-xcb.h>
 #endif
 
+#if defined(RENDERDOC_WINDOWING_WAYLAND_REPLAY)
+#include <wayland-client.h>
+#include "xdg-shell-client-protocol.h"
+#endif
+
 #include <replay/renderdoc_replay.h>
 
 void Daemonise()
@@ -50,9 +55,250 @@ void Daemonise()
 
 static Display *display = NULL;
 
+#if defined(RENDERDOC_WINDOWING_WAYLAND_REPLAY)
+
+// State for a minimal Wayland client window used for replay preview.
+struct WaylandWindow
+{
+  wl_display *display       = NULL;
+  wl_registry *registry     = NULL;
+  wl_compositor *compositor = NULL;
+  wl_surface *surface       = NULL;
+
+  xdg_wm_base *wmBase   = NULL;
+  xdg_surface *xdgSurf  = NULL;
+  xdg_toplevel *toplevel = NULL;
+
+  uint32_t width  = 0;
+  uint32_t height = 0;
+
+  // Set true once the first xdg_surface configure has been acked.
+  bool configured = false;
+  // Set true when the compositor requests close.
+  bool closed = false;
+};
+
+// --- xdg_toplevel listener ---------------------------------------------------
+
+static void xdgToplevelConfigure(void *data, xdg_toplevel *, int32_t w,
+                                  int32_t h, wl_array *)
+{
+  WaylandWindow *win = (WaylandWindow *)data;
+  if(w > 0 && h > 0)
+  {
+    win->width = (uint32_t)w;
+    win->height = (uint32_t)h;
+  }
+}
+
+static void xdgToplevelClose(void *data, xdg_toplevel *)
+{
+  WaylandWindow *win = (WaylandWindow *)data;
+  win->closed = true;
+}
+
+// configure_bounds was added in xdg-shell version 4, wm_capabilities in version 5.
+// Guard the extra callbacks so that this compiles against older protocol headers.
+#ifdef XDG_TOPLEVEL_CONFIGURE_BOUNDS_SINCE_VERSION
+static void xdgToplevelConfigureBounds(void *, xdg_toplevel *,
+                                        int32_t, int32_t)
+{
+}
+#endif
+
+#ifdef XDG_TOPLEVEL_WM_CAPABILITIES_SINCE_VERSION
+static void xdgToplevelWmCapabilities(void *, xdg_toplevel *,
+                                       wl_array *)
+{
+}
+#endif
+
+static const xdg_toplevel_listener toplevelListener = {
+    xdgToplevelConfigure,
+    xdgToplevelClose,
+#ifdef XDG_TOPLEVEL_CONFIGURE_BOUNDS_SINCE_VERSION
+    xdgToplevelConfigureBounds,
+#endif
+#ifdef XDG_TOPLEVEL_WM_CAPABILITIES_SINCE_VERSION
+    xdgToplevelWmCapabilities,
+#endif
+};
+
+// --- xdg_surface listener ----------------------------------------------------
+
+static void xdgSurfaceConfigure(void *data, xdg_surface *surf,
+                                 uint32_t serial)
+{
+  WaylandWindow *win = (WaylandWindow *)data;
+  xdg_surface_ack_configure(surf, serial);
+  win->configured = true;
+}
+
+static const xdg_surface_listener surfaceListener = {
+    xdgSurfaceConfigure,
+};
+
+// --- xdg_wm_base listener ---------------------------------------------------
+
+static void xdgWmBasePing(void *, xdg_wm_base *base, uint32_t serial)
+{
+  xdg_wm_base_pong(base, serial);
+}
+
+static const xdg_wm_base_listener wmBaseListener = {
+    xdgWmBasePing,
+};
+
+// --- wl_registry listener ----------------------------------------------------
+
+static void registryGlobal(void *data, wl_registry *reg,
+                            uint32_t name, const char *interface,
+                            uint32_t version)
+{
+  WaylandWindow *win = (WaylandWindow *)data;
+
+  if(strcmp(interface, wl_compositor_interface.name) == 0)
+  {
+    win->compositor =
+        (wl_compositor *)wl_registry_bind(reg, name,
+                                          &wl_compositor_interface, 4);
+  }
+  else if(strcmp(interface, xdg_wm_base_interface.name) == 0)
+  {
+    win->wmBase =
+        (xdg_wm_base *)wl_registry_bind(reg, name,
+                                         &xdg_wm_base_interface, 1);
+    xdg_wm_base_add_listener(win->wmBase, &wmBaseListener, win);
+  }
+}
+
+static void registryGlobalRemove(void *, wl_registry *, uint32_t)
+{
+}
+
+static const wl_registry_listener registryListener = {
+    registryGlobal,
+    registryGlobalRemove,
+};
+
+// Create a Wayland window. Returns true on success, false on failure.
+// The caller is responsible for calling WaylandWindowDestroy when done.
+static bool WaylandWindowCreate(WaylandWindow &win, wl_display *wlDisplay,
+                                uint32_t w, uint32_t h, const char *title)
+{
+  win.display = wlDisplay;
+  win.width   = w;
+  win.height  = h;
+
+  win.registry = wl_display_get_registry(win.display);
+  wl_registry_add_listener(win.registry, &registryListener, &win);
+
+  // Roundtrip to receive registry globals.
+  wl_display_roundtrip(win.display);
+
+  if(!win.compositor || !win.wmBase)
+  {
+    std::cerr << "Wayland compositor missing wl_compositor or xdg_wm_base"
+              << std::endl;
+    return false;
+  }
+
+  win.surface = wl_compositor_create_surface(win.compositor);
+  win.xdgSurf = xdg_wm_base_get_xdg_surface(win.wmBase, win.surface);
+  xdg_surface_add_listener(win.xdgSurf, &surfaceListener, &win);
+
+  win.toplevel = xdg_surface_get_toplevel(win.xdgSurf);
+  xdg_toplevel_add_listener(win.toplevel, &toplevelListener, &win);
+  xdg_toplevel_set_title(win.toplevel, title);
+  xdg_toplevel_set_app_id(win.toplevel, "renderdoccmd");
+
+  // Commit the surface to trigger the initial configure sequence.
+  wl_surface_commit(win.surface);
+
+  // Block until the compositor sends the initial configure event so that
+  // the surface is ready for use before we hand it to the replay driver.
+  while(!win.configured && !win.closed)
+    wl_display_roundtrip(win.display);
+
+  return true;
+}
+
+static void WaylandWindowDestroy(WaylandWindow &win)
+{
+  if(win.toplevel)
+    xdg_toplevel_destroy(win.toplevel);
+  if(win.xdgSurf)
+    xdg_surface_destroy(win.xdgSurf);
+  if(win.surface)
+    wl_surface_destroy(win.surface);
+  if(win.wmBase)
+    xdg_wm_base_destroy(win.wmBase);
+  if(win.compositor)
+    wl_compositor_destroy(win.compositor);
+  if(win.registry)
+    wl_registry_destroy(win.registry);
+
+  win = {};
+}
+
+// The Wayland display connection used for renderdoccmd windows.
+static wl_display *waylandDisplay = NULL;
+
+#endif    // RENDERDOC_WINDOWING_WAYLAND_REPLAY
+
 WindowingData DisplayRemoteServerPreview(bool active, const rdcarray<WindowingSystem> &systems)
 {
   static WindowingData remoteServerPreview = {WindowingSystem::Unknown};
+
+#if defined(RENDERDOC_WINDOWING_WAYLAND_REPLAY)
+  // Static state for the Wayland remote server preview window. Persists across
+  // calls so that the window stays alive while the remote server is active.
+  static WaylandWindow waylandPreviewWindow = {};
+
+  if(waylandDisplay)
+  {
+    bool wantWayland = false;
+    for(size_t i = 0; i < systems.size(); i++)
+    {
+      if(systems[i] == WindowingSystem::Wayland)
+        wantWayland = true;
+    }
+
+    if(wantWayland)
+    {
+      if(active)
+      {
+        if(remoteServerPreview.system == WindowingSystem::Unknown)
+        {
+          if(!WaylandWindowCreate(waylandPreviewWindow, waylandDisplay,
+                                  1280, 720, "Remote Server Preview"))
+          {
+            std::cerr << "Couldn't create Wayland preview window"
+                      << std::endl;
+            return remoteServerPreview;
+          }
+
+          remoteServerPreview =
+              CreateWaylandWindowingData(waylandPreviewWindow.display,
+                                        waylandPreviewWindow.surface);
+        }
+        else
+        {
+          // Dispatch pending events without blocking.
+          wl_display_dispatch_pending(waylandDisplay);
+          wl_display_flush(waylandDisplay);
+        }
+      }
+      else
+      {
+        WaylandWindowDestroy(waylandPreviewWindow);
+        remoteServerPreview = {WindowingSystem::Unknown};
+      }
+
+      return remoteServerPreview;
+    }
+  }
+#endif
 
 // we only have the preview implemented for platforms that have xlib & xcb. It's unlikely
 // a meaningful platform exists with only one, and at the time of writing no other windowing
@@ -167,6 +413,73 @@ WindowingData DisplayRemoteServerPreview(bool active, const rdcarray<WindowingSy
 void DisplayRendererPreview(IReplayController *renderer, TextureDisplay &displayCfg, uint32_t width,
                             uint32_t height, uint32_t numLoops)
 {
+#if defined(RENDERDOC_WINDOWING_WAYLAND_REPLAY)
+  if(waylandDisplay)
+  {
+    rdcarray<WindowingSystem> systems = renderer->GetSupportedWindowSystems();
+
+    bool wantWayland = false;
+    for(size_t i = 0; i < systems.size(); i++)
+    {
+      if(systems[i] == WindowingSystem::Wayland)
+        wantWayland = true;
+    }
+
+    if(wantWayland)
+    {
+      WaylandWindow win = {};
+
+      if(!WaylandWindowCreate(win, waylandDisplay, width, height,
+                              "renderdoccmd"))
+      {
+        std::cerr << "Couldn't create Wayland preview window"
+                  << std::endl;
+        return;
+      }
+
+      IReplayOutput *out =
+          renderer->CreateOutput(
+              CreateWaylandWindowingData(win.display, win.surface),
+              ReplayOutputType::Texture);
+
+      if(!out)
+      {
+        std::cerr << "Couldn't create replay output on Wayland surface"
+                  << std::endl;
+        WaylandWindowDestroy(win);
+        return;
+      }
+
+      out->SetTextureDisplay(displayCfg);
+
+      uint32_t loopCount = 0;
+
+      while(!win.closed)
+      {
+        // Non-blocking dispatch of Wayland events (configure, ping, close).
+        while(wl_display_prepare_read(waylandDisplay) != 0)
+          wl_display_dispatch_pending(waylandDisplay);
+        wl_display_flush(waylandDisplay);
+        wl_display_read_events(waylandDisplay);
+        wl_display_dispatch_pending(waylandDisplay);
+
+        renderer->SetFrameEvent(10000000, true);
+        out->Display();
+
+        usleep(100000);
+
+        loopCount++;
+
+        if(numLoops > 0 && loopCount == numLoops)
+          break;
+      }
+
+      WaylandWindowDestroy(win);
+      return;
+    }
+  }
+#endif
+
 // we only have the preview implemented for platforms that have xlib & xcb. It's unlikely
 // a meaningful platform exists with only one, and at the time of writing no other windowing
 // systems are supported on linux for the replay
@@ -331,6 +644,17 @@ int main(int argc, char *argv[])
 
   GlobalEnvironment env;
 
+#if defined(RENDERDOC_WINDOWING_WAYLAND_REPLAY)
+  // Try to connect to a Wayland compositor. If WAYLAND_DISPLAY is set the
+  // session is likely Wayland-native; otherwise we skip and fall back to X.
+  if(getenv("WAYLAND_DISPLAY"))
+  {
+    waylandDisplay = wl_display_connect(NULL);
+    if(waylandDisplay)
+      env.waylandDisplay = waylandDisplay;
+  }
+#endif
+
 #if defined(RENDERDOC_WINDOWING_XLIB) || defined(RENDERDOC_WINDOWING_XCB)
   // call XInitThreads - although we don't use xlib concurrently the driver might need to.
   XInitThreads();
@@ -387,7 +711,7 @@ int main(int argc, char *argv[])
 #endif
 
 #if defined(RENDERDOC_WINDOWING_WAYLAND)
-    support += "Wayland (CAPTURE ONLY), ";
+    support += "Wayland, ";
     count++;
 #endif
 
@@ -416,6 +740,11 @@ int main(int argc, char *argv[])
 #if defined(RENDERDOC_WINDOWING_XLIB) || defined(RENDERDOC_WINDOWING_XCB)
   if(display)
     XCloseDisplay(display);
+#endif
+
+#if defined(RENDERDOC_WINDOWING_WAYLAND_REPLAY)
+  if(waylandDisplay)
+    wl_display_disconnect(waylandDisplay);
 #endif
 
   return ret;

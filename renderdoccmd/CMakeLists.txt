@@ -65,6 +65,42 @@ elseif(UNIX)
         list(APPEND libraries PRIVATE -lX11-xcb)
     endif()
 
+    if(ENABLE_WAYLAND_CAPTURE)
+        find_package(PkgConfig REQUIRED)
+        pkg_check_modules(PKG_WAYLAND REQUIRED wayland-client)
+        pkg_check_modules(PKG_WAYLAND_PROTOCOLS QUIET wayland-protocols)
+        pkg_get_variable(WAYLAND_SCANNER_EXECUTABLE wayland-scanner wayland_scanner)
+
+        if(WAYLAND_SCANNER_EXECUTABLE AND PKG_WAYLAND_PROTOCOLS_FOUND)
+            pkg_get_variable(WAYLAND_PROTOCOLS_DIR wayland-protocols pkgdatadir)
+
+            set(XDG_SHELL_XML "${WAYLAND_PROTOCOLS_DIR}/stable/xdg-shell/xdg-shell.xml")
+            set(XDG_SHELL_HEADER "${CMAKE_CURRENT_BINARY_DIR}/xdg-shell-client-protocol.h")
+            set(XDG_SHELL_CODE "${CMAKE_CURRENT_BINARY_DIR}/xdg-shell-protocol.c")
+
+            add_custom_command(
+                OUTPUT ${XDG_SHELL_HEADER}
+                COMMAND ${WAYLAND_SCANNER_EXECUTABLE} client-header ${XDG_SHELL_XML} ${XDG_SHELL_HEADER}
+                DEPENDS ${XDG_SHELL_XML}
+                COMMENT "Generating xdg-shell client protocol header"
+            )
+            add_custom_command(
+                OUTPUT ${XDG_SHELL_CODE}
+                COMMAND ${WAYLAND_SCANNER_EXECUTABLE} private-code ${XDG_SHELL_XML} ${XDG_SHELL_CODE}
+                DEPENDS ${XDG_SHELL_XML}
+                COMMENT "Generating xdg-shell protocol code"
+            )
+
+            list(APPEND sources ${XDG_SHELL_HEADER} ${XDG_SHELL_CODE})
+            list(APPEND includes PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+            list(APPEND libraries PRIVATE -l${PKG_WAYLAND_LIBRARIES})
+
+            add_definitions(-DRENDERDOC_WINDOWING_WAYLAND_REPLAY)
+        else()
+            message(WARNING "wayland-scanner or wayland-protocols not found - disabling Wayland replay window support")
+        endif()
+    endif()
+
     # Make sure that for the target executable we don't throw away
     # any shared libraries.
     set(LINKER_FLAGS "-Wl,--no-as-needed -rdynamic")
