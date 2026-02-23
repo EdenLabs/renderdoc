@@ -27,6 +27,7 @@
 #include "driver/dxgi/dxgi_common.h"
 #include "driver/ihv/amd/official/DXExt/AmdExtD3D.h"
 #include "driver/ihv/amd/official/DXExt/AmdExtD3DCommandListMarkerApi.h"
+#include "driver/ihv/nv/nv_aftermath.h"
 #include "d3d12_command_list.h"
 #include "d3d12_command_queue.h"
 #include "d3d12_replay.h"
@@ -596,6 +597,9 @@ bool WrappedID3D12Device::Serialise_CreateGraphicsPipelineState(
             WrappedID3D12Shader::AddShader(InlineShaderIDs[i], *shaders[i], this);
         entry->AddRef();
 
+        NVAftermath_Shader(ShaderEncoding::DXBC, shaders[i]->pShaderBytecode,
+                           shaders[i]->BytecodeLength);
+
         shaders[i]->pShaderBytecode = entry;
 
         if(m_GlobalEXTUAV != ~0U)
@@ -893,6 +897,9 @@ bool WrappedID3D12Device::Serialise_CreateComputePipelineState(
     WrappedID3D12Shader *entry =
         WrappedID3D12Shader::AddShader(InlineShaderID, wrapped->compute->CS, this);
     entry->AddRef();
+
+    NVAftermath_Shader(ShaderEncoding::DXBC, wrapped->compute->CS.pShaderBytecode,
+                       wrapped->compute->CS.BytecodeLength);
 
     if(m_GlobalEXTUAV != ~0U)
       entry->SetShaderExtSlot(m_GlobalEXTUAV, m_GlobalEXTUAVSpace);

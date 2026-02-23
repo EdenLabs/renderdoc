@@ -5630,6 +5630,11 @@ VkBool32 WrappedVulkan::DebugCallback(MessageSeverity severity, MessageCategory 
     if(strstr(pMessageId, "VUID-VkMemoryDedicatedAllocateInfo-image-02964"))
       return false;
 
+    // this complains about access flags being set when not valid but we commonly hit this with our
+    // all-access barriers. We do not expect this to actually break so ignore the spam
+    if(strstr(pMessageId, "VUID-vkCmdPipelineBarrier-pImageMemoryBarriers-02820"))
+      return false;
+
     // "Missing extension required by the device extension VK_KHR_driver_properties:
     // VK_KHR_get_physical_device_properties2. The Vulkan spec states: All required extensions for
     // each extension in the VkDeviceCreateInfo::ppEnabledExtensionNames list must also be present
