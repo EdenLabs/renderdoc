@@ -164,7 +164,7 @@ void WrappedShader::ShaderEntry::Reload()
   m_Access.clear();
   if(m_Bytecode.empty() && m_DXBCFile)
   {
-    m_Bytecode = m_DXBCFile->GetInitialShaderBob();
+    m_Bytecode = m_DXBCFile->GetInitialShaderBlob();
     if(m_Bytecode.empty())
       m_Bytecode = m_DXBCFile->GetShaderBlob();
   }

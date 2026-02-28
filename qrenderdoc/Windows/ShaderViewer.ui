@@ -304,6 +304,12 @@
       <property name="toolTip">
        <string>Show/Hide Debug Info Logging Panel</string>
       </property>
+      <property name="checkable">
+       <bool>true</bool>
+      </property>
+      <property name="text">
+       <string>Debug Info</string>
+      </property>
       <property name="icon">
        <iconset resource="../Resources/resources.qrc">
         <normaloff>:/information.png</normaloff>:/information.png</iconset>

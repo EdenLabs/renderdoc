@@ -1742,7 +1742,7 @@ void DXBCContainer::TryFetchSeparateDebugInfo(bytebuf &byteCode, const rdcstr &d
   else
   {
     m_DebugInfoLoadingLog =
-        StringFormat::Fmt("Found debug data in the shader '%s'\n\n", debugInfoPath.c_str());
+        StringFormat::Fmt("Found debug data in the shader\n\n", debugInfoPath.c_str());
   }
   if(!loadingLog.empty())
   {

@@ -2761,9 +2761,16 @@ bool WrappedID3D12Device::Serialise_BeginCaptureFrame(SerialiserType &ser)
     for(uint32_t i = 0; i < numAnnotations; i++)
     {
       SERIALISE_ELEMENT_LOCAL(id, it->first);
-      SDObject *annotation = it->second;
+      SDObject *annotation = NULL;
       if(ser.IsReading())
+      {
         annotation = new SDObject(""_lit, ""_lit);    // will be overwritten below
+      }
+      else
+      {
+        annotation = it->second;
+        it++;
+      }
       ser.Serialise("annotation"_lit, *annotation);
 
       if(ser.IsReading() && IsLoading(m_State))
@@ -2771,8 +2778,6 @@ bool WrappedID3D12Device::Serialise_BeginCaptureFrame(SerialiserType &ser)
         m_Annotations[id] = annotation;
         m_Replay->GetResourceDesc(id).annotations = annotation;
       }
-
-      ++it;
     }
 
     if(numAnnotations > 0)

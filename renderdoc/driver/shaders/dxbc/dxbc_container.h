@@ -203,7 +203,7 @@ public:
     uint32_t Major = 0, Minor = 0;
   } m_Version;
 
-  const bytebuf &GetInitialShaderBob() const { return m_InitialShaderBlob; }
+  const bytebuf &GetInitialShaderBlob() const { return m_InitialShaderBlob; }
   const bytebuf &GetShaderBlob() const { return m_ShaderBlob; }
   const IDebugInfo *GetDebugInfo() const { return m_DebugInfo; }
   const Reflection *GetReflection() const { return m_Reflection; }

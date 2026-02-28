@@ -1109,12 +1109,12 @@ static void ConvertToMeshOutputCompute(const ShaderReflection &refl, const SPIRV
           {
             if(action->flags & ActionFlags::Indexed)
             {
-              valueID = editor.AddConstantImmediate<uint32_t>(action->baseVertex);
+              valueID = editor.AddConstantImmediate<int32_t>(action->baseVertex);
               compType = CompType::SInt;
             }
             else
             {
-              valueID = editor.AddConstantImmediate<int32_t>(action->vertexOffset);
+              valueID = editor.AddConstantImmediate<uint32_t>(action->vertexOffset);
             }
           }
           else if(builtin == ShaderBuiltin::BaseInstance)
