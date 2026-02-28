@@ -296,6 +296,10 @@ void GLReplay::GetOutputWindowDimensions(uint64_t id, int32_t &w, int32_t &h)
   m_pDriver->m_Platform.GetOutputWindowDimensions(outw, w, h);
 }
 
+void GLReplay::SetOutputWindowDimensions(uint64_t id, int32_t w, int32_t h)
+{
+}
+
 void GLReplay::GetOutputWindowData(uint64_t id, bytebuf &retData)
 {
   if(id == 0 || m_OutputWindows.find(id) == m_OutputWindows.end())

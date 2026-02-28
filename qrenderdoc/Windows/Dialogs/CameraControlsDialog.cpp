@@ -550,10 +550,10 @@ void FetchDefaultPrimaryKeys()
   // if both general and xcb symbols loaded, we're good to go
   if(dyn_xkb_context_new && dyn_xkb_x11_keymap_new_from_device)
   {
-    auto *x11App = qApp->nativeInterface<
-        QNativeInterface::QX11Application>();
-    xcb_connection_t *connection =
-        x11App ? x11App->connection() : nullptr;
+    auto *x11App = qApp->nativeInterface<QNativeInterface::QX11Application>();
+    if(!x11App)
+      return;
+    xcb_connection_t *connection = x11App->connection();
     xkb_context *context = dyn_xkb_context_new(XKB_CONTEXT_NO_DEFAULT_INCLUDES);
     int core_device_id = dyn_xkb_x11_get_core_keyboard_device_id(connection);
     xkb_keymap *keymap = dyn_xkb_x11_keymap_new_from_device(context, connection, core_device_id,

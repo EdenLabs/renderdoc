@@ -804,15 +804,10 @@ void VirtualFileDialog::on_filename_keyPress(QKeyEvent *e)
 
   for(int f = 0; f < fileCount; f++)
   {
-    QModelIndex file =
-        m_FileProxy->index(f, 0, curDir);
-    bool isDir = m_FileProxy
-        ->data(file, RemoteFileModel::FileIsDirRole)
-        .toBool();
+    QModelIndex file = m_FileProxy->index(f, 0, curDir);
+    bool isDir = m_FileProxy->data(file, RemoteFileModel::FileIsDirRole).toBool();
 
-    QString filename = m_FileProxy
-        ->data(file, RemoteFileModel::FileNameRole)
-        .toString();
+    QString filename = m_FileProxy->data(file, RemoteFileModel::FileNameRole).toString();
 
     if(re.match(filename).hasMatch())
     {
@@ -872,8 +867,7 @@ void VirtualFileDialog::on_buttonBox_accepted()
   }
 
   // simulate enter being pressed
-  QKeyEvent fakeEvent(
-      QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier);
+  QKeyEvent fakeEvent(QEvent::KeyPress, Qt::Key_Return, Qt::NoModifier);
   on_filename_keyPress(&fakeEvent);
 }
 

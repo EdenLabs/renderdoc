@@ -81,7 +81,7 @@ struct WaylandWindow
 // --- xdg_toplevel listener ---------------------------------------------------
 
 static void xdgToplevelConfigure(void *data, xdg_toplevel *, int32_t w,
-                                  int32_t h, wl_array *)
+                                 int32_t h, wl_array *)
 {
   WaylandWindow *win = (WaylandWindow *)data;
   if(w > 0 && h > 0)
@@ -101,14 +101,14 @@ static void xdgToplevelClose(void *data, xdg_toplevel *)
 // Guard the extra callbacks so that this compiles against older protocol headers.
 #ifdef XDG_TOPLEVEL_CONFIGURE_BOUNDS_SINCE_VERSION
 static void xdgToplevelConfigureBounds(void *, xdg_toplevel *,
-                                        int32_t, int32_t)
+                                       int32_t, int32_t)
 {
 }
 #endif
 
 #ifdef XDG_TOPLEVEL_WM_CAPABILITIES_SINCE_VERSION
 static void xdgToplevelWmCapabilities(void *, xdg_toplevel *,
-                                       wl_array *)
+                                      wl_array *)
 {
 }
 #endif
@@ -127,7 +127,7 @@ static const xdg_toplevel_listener toplevelListener = {
 // --- xdg_surface listener ----------------------------------------------------
 
 static void xdgSurfaceConfigure(void *data, xdg_surface *surf,
-                                 uint32_t serial)
+                                uint32_t serial)
 {
   WaylandWindow *win = (WaylandWindow *)data;
   xdg_surface_ack_configure(surf, serial);
@@ -152,8 +152,8 @@ static const xdg_wm_base_listener wmBaseListener = {
 // --- wl_registry listener ----------------------------------------------------
 
 static void registryGlobal(void *data, wl_registry *reg,
-                            uint32_t name, const char *interface,
-                            uint32_t version)
+                           uint32_t name, const char *interface,
+                           uint32_t version)
 {
   WaylandWindow *win = (WaylandWindow *)data;
 
@@ -167,7 +167,7 @@ static void registryGlobal(void *data, wl_registry *reg,
   {
     win->wmBase =
         (xdg_wm_base *)wl_registry_bind(reg, name,
-                                         &xdg_wm_base_interface, 1);
+                                        &xdg_wm_base_interface, 1);
     xdg_wm_base_add_listener(win->wmBase, &wmBaseListener, win);
   }
 }

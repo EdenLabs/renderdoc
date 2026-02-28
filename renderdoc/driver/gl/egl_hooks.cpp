@@ -257,8 +257,8 @@ HOOK_EXPORT EGLDisplay EGLAPIENTRY eglGetPlatformDisplay_renderdoc_hooked(EGLenu
 }
 
 HOOK_EXPORT EGLDisplay EGLAPIENTRY eglGetPlatformDisplayEXT_renderdoc_hooked(EGLenum platform,
-                                                                              void *native_display,
-                                                                              const EGLint *attrib_list)
+                                                                             void *native_display,
+                                                                             const EGLint *attrib_list)
 {
   if(RenderDoc::Inst().IsReplayApp())
   {
@@ -855,7 +855,7 @@ HOOK_EXPORT EGLDisplay EGLAPIENTRY eglGetPlatformDisplay(EGLenum platform, void 
 }
 
 HOOK_EXPORT EGLDisplay EGLAPIENTRY eglGetPlatformDisplayEXT(EGLenum platform, void *native_display,
-                                                             const EGLint *attrib_list)
+                                                            const EGLint *attrib_list)
 {
   return eglGetPlatformDisplayEXT_renderdoc_hooked(platform, native_display, attrib_list);
 }

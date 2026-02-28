@@ -343,8 +343,7 @@ void ConfigureSyntax(ScintillaEdit *scintilla, int language)
   bool glsl = false;
   int lexLang = language;
 
-  if(lexLang == SCLEX_HLSL || lexLang == SCLEX_GLSL ||
-     lexLang == SCLEX_BUFFER)
+  if(lexLang == SCLEX_HLSL || lexLang == SCLEX_GLSL || lexLang == SCLEX_BUFFER)
     lexLang = SCLEX_CPP;
 
   // Map language ID to Lexilla lexer name.
@@ -354,8 +353,7 @@ void ConfigureSyntax(ScintillaEdit *scintilla, int language)
   else if(lexLang == SCLEX_PYTHON)
     lexName = "python";
 
-  Scintilla::ILexer5 *pLexer =
-      CreateLexer(lexName);
+  Scintilla::ILexer5 *pLexer = CreateLexer(lexName);
   scintilla->setILexer((sptr_t)pLexer);
 
 #define SC_COL(qcol) SCINTILLA_COLOUR(qcol.red(), qcol.green(), qcol.blue())

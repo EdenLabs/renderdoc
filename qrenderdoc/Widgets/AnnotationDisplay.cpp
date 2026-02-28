@@ -306,7 +306,7 @@ void AnnotationDisplay::customContextMenu(QModelIndex index, QMenu *menu)
     if(path.empty())
       path = obj->name;
     else
-      path = rdcstr(obj->name) + rdcstr(".") + path;
+      path = obj->name + rdcstr(".") + path;
     obj = obj->GetParent();
   }
 

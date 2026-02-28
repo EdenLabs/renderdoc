@@ -216,7 +216,6 @@ MarkerBreadcrumbs::MarkerBreadcrumbs(ICaptureContext &ctx, IEventBrowser *browse
   m_ElidedItems->setText(lit("..."));
 
   m_Layout = new BreadcrumbsLayout(this, m_ElidedItems);
-  m_Layout->setContentsMargins(QMargins(0, 2, 0, 2));
   m_Layout->setContentsMargins(0, 0, 0, 0);
   setLayout(m_Layout);
 

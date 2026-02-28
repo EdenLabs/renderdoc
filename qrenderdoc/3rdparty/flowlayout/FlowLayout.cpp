@@ -110,7 +110,7 @@ QLayoutItem *FlowLayout::takeAt(int index)
     if (index >= 0 && index < itemList.size())
         return itemList.takeAt(index);
     else
-        return nullptr;
+        return 0;
 }
 
 Qt::Orientations FlowLayout::expandingDirections() const

@@ -377,6 +377,10 @@ void D3D12Replay::GetOutputWindowDimensions(uint64_t id, int32_t &w, int32_t &h)
   h = m_OutputWindows[id].height;
 }
 
+void D3D12Replay::SetOutputWindowDimensions(uint64_t id, int32_t w, int32_t h)
+{
+}
+
 void D3D12Replay::GetOutputWindowData(uint64_t id, bytebuf &retData)
 {
   if(id == 0 || m_OutputWindows.find(id) == m_OutputWindows.end())

@@ -65,11 +65,7 @@ public:
 
   void setColumnGroupRole(int role);
   int columnGroupRole() const { return m_columnGroupRole; }
-  void initViewItemOption(
-      QStyleOptionViewItem *option) const override
-  {
-    QTableView::initViewItemOption(option);
-  }
+  void initViewItemOption(QStyleOptionViewItem *option) const override { QTableView::initViewItemOption(option); }
   void setPinnedColumns(int numColumns);
   int pinnedColumns() const { return m_pinnedColumns; }
 protected:

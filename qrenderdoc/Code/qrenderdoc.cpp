@@ -43,20 +43,16 @@
 
 QString getOSVersion()
 {
-  QOperatingSystemVersion ver =
-      QOperatingSystemVersion::current();
+  QOperatingSystemVersion ver = QOperatingSystemVersion::current();
 
-  if(ver.type() == QOperatingSystemVersion::Windows
-     && ver.majorVersion() >= 10)
+  if(ver.type() == QOperatingSystemVersion::Windows && ver.majorVersion() >= 10)
   {
     int major = ver.majorVersion();
     int build = ver.microVersion();
     if(build >= 22000)
       major = 11;
 
-    return QFormatStr("Windows %1 Build num %2")
-        .arg(major)
-        .arg(build);
+    return QFormatStr("Windows %1 Build num %2").arg(major).arg(build);
   }
 
   return QSysInfo::prettyProductName();

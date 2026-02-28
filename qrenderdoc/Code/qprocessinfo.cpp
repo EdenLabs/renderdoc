@@ -290,23 +290,19 @@ QProcessList QProcessInfo::enumerate(bool includeWindowTitles)
         QRegularExpression geometry(
             QStringLiteral("Geometry: (\\d+)x(\\d+)"));
 
-        QString posString =
-            QString::fromUtf8(winGeometry[1]);
-        QString geometryString =
-            QString::fromUtf8(winGeometry[2]);
+        QString posString = QString::fromUtf8(winGeometry[1]);
+        QString geometryString = QString::fromUtf8(winGeometry[2]);
 
         int x = 0, y = 0, w = 1000, h = 1000;
 
-        QRegularExpressionMatch posMatch =
-            pos.match(posString);
+        QRegularExpressionMatch posMatch = pos.match(posString);
         if(posMatch.hasMatch())
         {
           x = posMatch.captured(1).toInt();
           y = posMatch.captured(2).toInt();
         }
 
-        QRegularExpressionMatch geomMatch =
-            geometry.match(geometryString);
+        QRegularExpressionMatch geomMatch = geometry.match(geometryString);
         if(geomMatch.hasMatch())
         {
           w = geomMatch.captured(1).toInt();

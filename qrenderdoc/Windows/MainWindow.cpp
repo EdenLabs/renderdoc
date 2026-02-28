@@ -35,9 +35,9 @@
 #include <QProgressBar>
 #include <QProgressDialog>
 #include <QShortcut>
+#include <QStandardPaths>
 #include <QToolButton>
 #include <QToolTip>
-#include <QStandardPaths>
 #include "Code/QRDUtils.h"
 #include "Code/Resources.h"
 #include "Widgets/Extended/RDLabel.h"

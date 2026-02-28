@@ -274,8 +274,7 @@ protected:
   {
     QVariant l = sourceModel()->data(left, SortDataRole);
     QVariant r = sourceModel()->data(right, SortDataRole);
-    return QVariant::compare(l, r)
-        == QPartialOrdering::less;
+    return QVariant::compare(l, r) == QPartialOrdering::less;
   }
 
 private:
