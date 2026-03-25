@@ -1221,7 +1221,7 @@ void MainWindow::SetTitle(const QString &filename)
     text += tr("Unstable %1 Build (%2 - %3)")
                 .arg(RENDERDOC_IsReleaseBuild() ? lit("Release") : lit("Development"))
                 .arg(lit(FULL_VERSION_STRING))
-                .arg(QString::fromLatin1(RENDERDOC_GetCommitHash()));
+                .arg(QString::fromLatin1(RENDERDOC_GetCommitHash()).left(8));
 
   if(IsRunningAsAdmin())
     text += tr(" (Administrator)");

@@ -272,7 +272,11 @@ endif()
 if(ENABLE_WAYLAND_UI)
     file(APPEND
         ${CMAKE_BINARY_DIR}/qrenderdoc/qrenderdoc_cmake.pri
-        "DEFINES+=RENDERDOC_WAYLAND_UI\n")
+        "DEFINES+=RENDERDOC_WAYLAND_UI\n"
+        "SOURCES+=$$_PRO_FILE_PWD_/Code/xdg-shell-protocol.c\n"
+        "SOURCES+=$$_PRO_FILE_PWD_/Code/xdg-decoration-unstable-v1-protocol.c\n"
+        "LIBS+=-lwayland-client\n"
+        "QT+=waylandclient-private\n")
 endif()
 
 # propagate build version info. Lots of escaping needed here to pass ""s into the define value

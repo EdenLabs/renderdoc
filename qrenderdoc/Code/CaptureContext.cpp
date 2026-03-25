@@ -73,6 +73,69 @@
 #include <QtGui/qpa/qplatformwindow_p.h>
 #endif
 
+#if defined(RENDERDOC_WAYLAND_UI)
+#include <QtWaylandClient/private/qwaylandwindow_p.h>
+extern "C" {
+#include "xdg-decoration-unstable-v1-client-protocol.h"
+}
+
+// Wayland registry listener to find the xdg-decoration manager global.
+static struct zxdg_decoration_manager_v1 *s_decorationManager = nullptr;
+
+static void registryGlobal(void *, struct wl_registry *registry, uint32_t name,
+                           const char *interface, uint32_t version)
+{
+  if(strcmp(interface, zxdg_decoration_manager_v1_interface.name) == 0)
+    s_decorationManager = (struct zxdg_decoration_manager_v1 *)wl_registry_bind(
+        registry, name, &zxdg_decoration_manager_v1_interface, 1);
+}
+
+static void registryGlobalRemove(void *, struct wl_registry *, uint32_t) {}
+
+static const struct wl_registry_listener s_registryListener = {registryGlobal, registryGlobalRemove};
+
+// Listener for the xdg_toplevel_decoration configure event.
+static void decorationConfigure(void *, struct zxdg_toplevel_decoration_v1 *, uint32_t) {}
+
+static const struct zxdg_toplevel_decoration_v1_listener s_decorationListener = {
+    decorationConfigure};
+
+// Request server-side decorations from the Wayland compositor. Qt6 has a CSD
+// bug where the titlebar is drawn twice. The main window must have
+// Qt::FramelessWindowHint set BEFORE being shown so that Qt does not create
+// its own xdg_toplevel_decoration (which would conflict with ours).
+static void requestWaylandSSD(QWidget *window, struct wl_display *display)
+{
+  // Bind to the xdg-decoration manager global.
+  struct wl_registry *registry = wl_display_get_registry(display);
+  wl_registry_add_listener(registry, &s_registryListener, nullptr);
+  wl_display_roundtrip(display);
+  wl_registry_destroy(registry);
+
+  if(!s_decorationManager)
+    return;
+
+  // Get the xdg_toplevel via Qt's private QWaylandWindow API.
+  auto *waylandWindow =
+      dynamic_cast<QtWaylandClient::QWaylandWindow *>(window->windowHandle()->handle());
+  if(!waylandWindow)
+    return;
+
+  std::any role = waylandWindow->_surfaceRole();
+  auto *xdgToplevel = std::any_cast<struct xdg_toplevel *>(&role);
+  if(!xdgToplevel || !*xdgToplevel)
+    return;
+
+  // Create decoration, attach listener, and request server-side mode.
+  struct zxdg_toplevel_decoration_v1 *decoration =
+      zxdg_decoration_manager_v1_get_toplevel_decoration(s_decorationManager, *xdgToplevel);
+  zxdg_toplevel_decoration_v1_add_listener(decoration, &s_decorationListener, nullptr);
+  zxdg_toplevel_decoration_v1_set_mode(decoration,
+                                       ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
+  wl_display_flush(display);
+}
+#endif
+
 #include "pipestate.inl"
 
 CaptureContext::CaptureContext(PersistantConfig &cfg) : m_Config(cfg)
@@ -251,7 +314,25 @@ CaptureContext::~CaptureContext()
 void CaptureContext::Begin(QString paramFilename, QString remoteHost, uint32_t remoteIdent,
                            bool temp, QString scriptFilename)
 {
+#if defined(RENDERDOC_WAYLAND_UI)
+  // Set frameless before showing so Qt does not create an xdg_toplevel_decoration.
+  // We create our own and request server-side decorations to work around a Qt6 CSD
+  // bug where the titlebar is drawn twice.
+  if(QGuiApplication::platformName() == QLatin1String("wayland"))
+    m_MainWindow->Widget()->setWindowFlag(Qt::FramelessWindowHint, true);
+#endif
+
   m_MainWindow->show();
+
+#if defined(RENDERDOC_WAYLAND_UI)
+  if(QGuiApplication::platformName() == QLatin1String("wayland"))
+  {
+    auto *waylandApp =
+        qApp->nativeInterface<QNativeInterface::QWaylandApplication>();
+    if(waylandApp)
+      requestWaylandSSD(m_MainWindow->Widget(), waylandApp->display());
+  }
+#endif
 
   if(remoteIdent != 0)
   {

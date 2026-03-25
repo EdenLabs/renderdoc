@@ -194,6 +194,12 @@ int main(int argc, char *argv[])
       envChanged = true;
     }
   }
+#elif defined(RENDERDOC_WAYLAND_UI)
+  // Disable Qt's client-side window decorations on Wayland. Qt6 has a bug
+  // where the CSD titlebar is drawn twice after certain widget operations
+  // (creating native child surfaces, etc). We request server-side
+  // decorations from the compositor instead after the window is shown.
+  qputenv("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1");
 #endif
 
   QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
