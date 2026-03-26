@@ -12,6 +12,7 @@ if [[ ! -f "${BUILD_DIR}/CMakeCache.txt" ]] || \
         -DCMAKE_BUILD_TYPE=Debug \
         -DCMAKE_INSTALL_PREFIX=/usr \
         -DENABLE_WAYLAND_UI=ON \
+        -DBUILD_VERSION_STABLE=ON \
         -DVULKAN_LAYER_FOLDER=/etc/vulkan/implicit_layer.d \
         "${SCRIPT_DIR}"
 fi

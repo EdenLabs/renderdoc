@@ -1807,6 +1807,21 @@ void MainWindow::setProgress(float val)
 
 void MainWindow::setCaptureHasErrors(bool errors)
 {
+  int debugCount   = (int)m_Ctx.DebugMessages().size();
+  int unreadCount  = m_Ctx.UnreadMessageCount();
+
+  // Skip the update entirely when nothing has changed. Each setPixmap
+  // call forces a widget repaint, and under Wayland the repaint triggers
+  // a compositor surface commit that can delay Vulkan subsurface frames.
+  if(errors == m_prevCaptureHasErrors && m_messageAlternate == m_prevMessageAlternate &&
+     debugCount == m_prevDebugMessageCount && unreadCount == m_prevUnreadMessageCount)
+    return;
+
+  m_prevCaptureHasErrors    = errors;
+  m_prevMessageAlternate    = m_messageAlternate;
+  m_prevDebugMessageCount   = debugCount;
+  m_prevUnreadMessageCount  = unreadCount;
+
   QString filename = QFileInfo(m_Ctx.GetCaptureFilename()).fileName();
   if(errors)
   {
@@ -1817,9 +1832,9 @@ void MainWindow::setCaptureHasErrors(bool errors)
     statusIcon->setPixmap(m_messageAlternate ? empty : del);
 
     QString text;
-    text = tr("%1 loaded. Capture has %2 issues.").arg(filename).arg(m_Ctx.DebugMessages().size());
-    if(m_Ctx.UnreadMessageCount() > 0)
-      text += tr(" %1 Unread.").arg(m_Ctx.UnreadMessageCount());
+    text = tr("%1 loaded. Capture has %2 issues.").arg(filename).arg(debugCount);
+    if(unreadCount > 0)
+      text += tr(" %1 Unread.").arg(unreadCount);
     statusText->setText(text);
   }
   else
@@ -1859,14 +1874,12 @@ void MainWindow::messageCheck()
 {
   if(m_Ctx.IsCaptureLoaded())
   {
-    if(m_Ctx.Replay().GetCurrentProcessingTime() >= 1.5f)
+    bool showProgress = m_Ctx.Replay().GetCurrentProcessingTime() >= 1.5f;
+    if(showProgress != statusProgress->isVisible())
     {
-      statusProgress->setVisible(true);
-      statusProgress->setMaximum(0);
-    }
-    else
-    {
-      statusProgress->hide();
+      statusProgress->setVisible(showProgress);
+      if(showProgress)
+        statusProgress->setMaximum(0);
     }
 
     m_Ctx.Replay().AsyncInvoke([this](IReplayController *r) {
@@ -1894,9 +1907,16 @@ void MainWindow::messageCheck()
         msgs = r->GetDebugMessages();
       }
 
-      GUIInvoke::call(this, [this, msgs] {
-        if(m_Ctx.Replay().CurrentRemote().IsValid() &&
-           !m_Ctx.Replay().CurrentRemote().IsServerRunning())
+      // Only bounce back to the UI thread when there is actual state to
+      // update. Under Wayland, every GUIInvoke event wakes Qt's event
+      // loop which flushes the backing store, cascade-committing all
+      // child subsurfaces. Skipping the call when idle avoids that
+      // burst of Wayland protocol traffic that causes visible hitching.
+      if(!disconnected && msgs.empty())
+        return;
+
+      GUIInvoke::call(this, [this, msgs, disconnected] {
+        if(disconnected)
           contextChooser->setIcon(Icons::cross());
 
         if(!msgs.empty())

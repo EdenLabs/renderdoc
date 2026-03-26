@@ -270,6 +270,10 @@ private:
   QMap<QUrl, std::function<void(QByteArray)>> m_NetworkCompleteCallbacks;
 
   bool m_messageAlternate = false;
+  bool m_prevMessageAlternate = false;
+  bool m_prevCaptureHasErrors = false;
+  int m_prevDebugMessageCount = 0;
+  int m_prevUnreadMessageCount = 0;
 
   bool m_OwnTempCapture = false;
 
