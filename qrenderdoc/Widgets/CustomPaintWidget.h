@@ -27,6 +27,10 @@
 #include <QWidget>
 #include "Code/Interface/QRDInterface.h"
 
+#if defined(RENDERDOC_WAYLAND_UI)
+class RenderDocRhiWidget;
+#endif
+
 class CustomPaintWidget;
 
 // this is the internal widget that gets recreated
@@ -93,6 +97,7 @@ signals:
 
 private:
   void changeEvent(QEvent *event) override;
+  void resizeEvent(QResizeEvent *e) override;
   void keyPressEvent(QKeyEvent *e) override;
   void keyReleaseEvent(QKeyEvent *e) override;
   void paintEvent(QPaintEvent *e) override;
@@ -101,6 +106,11 @@ private:
   friend class CustomPaintWidgetInternal;
 
   CustomPaintWidgetInternal *m_Internal = NULL;
+
+#if defined(RENDERDOC_WAYLAND_UI)
+  RenderDocRhiWidget *m_RhiWidget = NULL;
+  bool useRhiWidget() const;
+#endif
 
   bool m_Rendering = false;
 

@@ -202,6 +202,7 @@ SOURCES += Code/qrenderdoc.cpp \
     Widgets/Extended/RDListView.cpp \
     Widgets/ComputeDebugSelector.cpp \
     Widgets/CustomPaintWidget.cpp \
+    Widgets/RenderDocRhiWidget.cpp \
     Widgets/ResourcePreview.cpp \
     Widgets/ThumbnailStrip.cpp \
     Widgets/ReplayOptionsSelector.cpp \
@@ -291,6 +292,7 @@ HEADERS += Code/CaptureContext.h \
     Widgets/Extended/RDListView.h \
     Widgets/ComputeDebugSelector.h \
     Widgets/CustomPaintWidget.h \
+    Widgets/RenderDocRhiWidget.h \
     Widgets/ResourcePreview.h \
     Widgets/ThumbnailStrip.h \
     Widgets/ReplayOptionsSelector.h \

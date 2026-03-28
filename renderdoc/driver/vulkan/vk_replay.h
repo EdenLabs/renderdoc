@@ -384,6 +384,8 @@ public:
   void GetOutputWindowDimensions(uint64_t id, int32_t &w, int32_t &h);
   void SetOutputWindowDimensions(uint64_t id, int32_t w, int32_t h);
   void GetOutputWindowData(uint64_t id, bytebuf &retData);
+  int GetOutputWindowDmabufFd(uint64_t id) override;
+  int GetOutputWindowDmabufStride(uint64_t id) override;
   void ClearOutputWindowColor(uint64_t id, FloatVector col);
   void ClearOutputWindowDepth(uint64_t id, float depth, uint8_t stencil);
   void BindOutputWindow(uint64_t id, bool depth);
@@ -618,6 +620,14 @@ private:
     VkDeviceMemory dsmem;
     VkImageView dsview;
     VkImageMemoryBarrier depthBarrier;
+
+    // Dmabuf export for Wayland QRhiWidget rendering. When enabled, bb is
+    // allocated with external memory and exported as a dmabuf fd for
+    // zero-copy sharing with Qt's compositor.
+    bool dmabufExport = false;
+    int dmabufFd     = -1;
+    uint32_t dmabufStride   = 0;
+    uint64_t dmabufModifier = 0;
 
     VulkanResourceManager *GetResourceManager() { return m_ResourceManager; }
     VulkanResourceManager *m_ResourceManager;

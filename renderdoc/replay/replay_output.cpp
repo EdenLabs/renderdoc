@@ -1122,3 +1122,13 @@ void ReplayOutput::DisplayMesh()
   m_pDevice->RenderMesh(m_EventID, secondaryDraws, mesh);
   m_pController->FatalErrorCheck();
 }
+
+int ReplayOutput::GetDmabufFd()
+{
+  return m_pDevice->GetOutputWindowDmabufFd(m_MainOutput.outputID);
+}
+
+int ReplayOutput::GetDmabufStride()
+{
+  return m_pDevice->GetOutputWindowDmabufStride(m_MainOutput.outputID);
+}

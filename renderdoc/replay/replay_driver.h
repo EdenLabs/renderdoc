@@ -269,6 +269,8 @@ public:
   virtual void GetOutputWindowDimensions(uint64_t id, int32_t &w, int32_t &h) = 0;
   virtual void SetOutputWindowDimensions(uint64_t id, int32_t w, int32_t h) = 0;
   virtual void GetOutputWindowData(uint64_t id, bytebuf &retData) = 0;
+  virtual int GetOutputWindowDmabufFd(uint64_t id) { return -1; }
+  virtual int GetOutputWindowDmabufStride(uint64_t id) { return 0; }
   virtual void ClearOutputWindowColor(uint64_t id, FloatVector col) = 0;
   virtual void ClearOutputWindowDepth(uint64_t id, float depth, uint8_t stencil) = 0;
   virtual void BindOutputWindow(uint64_t id, bool depth) = 0;

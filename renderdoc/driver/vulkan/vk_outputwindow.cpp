@@ -26,6 +26,10 @@
 #include "vk_core.h"
 #include "vk_replay.h"
 
+#if ENABLED(RDOC_LINUX)
+#include <unistd.h>    // close()
+#endif
+
 RDOC_EXTERN_CONFIG(bool, Vulkan_Debug_SingleSubmitFlushing);
 
 VulkanReplay::OutputWindow::OutputWindow()
@@ -109,6 +113,12 @@ void VulkanReplay::OutputWindow::Destroy(WrappedVulkan *driver, VkDevice device)
     bbview = VK_NULL_HANDLE;
     bbmem = VK_NULL_HANDLE;
     fb = VK_NULL_HANDLE;
+
+    if(dmabufFd >= 0)
+    {
+      close(dmabufFd);
+      dmabufFd = -1;
+    }
   }
 
   // not owned - freed with the swapchain
@@ -583,9 +593,18 @@ void VulkanReplay::OutputWindow::Create(WrappedVulkan *driver, VkDevice device, 
   }
 
   {
+    // When exporting via dmabuf, use linear tiling so the image is
+    // universally importable by Qt's Vulkan device. Otherwise use
+    // optimal tiling for best GPU performance.
+    VkExternalMemoryImageCreateInfo extMemImInfo = {
+        VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+        NULL,
+        VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
+    };
+
     VkImageCreateInfo imInfo = {
         VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-        NULL,
+        dmabufExport ? &extMemImInfo : NULL,
         0,
         VK_IMAGE_TYPE_2D,
         imformat,
@@ -593,9 +612,10 @@ void VulkanReplay::OutputWindow::Create(WrappedVulkan *driver, VkDevice device, 
         1,
         1,
         depth ? VULKAN_MESH_VIEW_SAMPLES : VK_SAMPLE_COUNT_1_BIT,
-        VK_IMAGE_TILING_OPTIMAL,
+        dmabufExport ? VK_IMAGE_TILING_LINEAR : VK_IMAGE_TILING_OPTIMAL,
         VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+            (dmabufExport ? (VkImageUsageFlags)VK_IMAGE_USAGE_SAMPLED_BIT : (VkImageUsageFlags)0),
         VK_SHARING_MODE_EXCLUSIVE,
         0,
         NULL,
@@ -613,9 +633,15 @@ void VulkanReplay::OutputWindow::Create(WrappedVulkan *driver, VkDevice device, 
 
     vt->GetImageMemoryRequirements(Unwrap(device), Unwrap(bb), &mrq);
 
+    VkExportMemoryAllocateInfo exportInfo = {
+        VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
+        NULL,
+        VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
+    };
+
     VkMemoryAllocateInfo allocInfo = {
         VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-        NULL,
+        dmabufExport ? &exportInfo : NULL,
         mrq.size,
         driver->GetGPULocalMemoryIndex(mrq.memoryTypeBits),
     };
@@ -630,6 +656,33 @@ void VulkanReplay::OutputWindow::Create(WrappedVulkan *driver, VkDevice device, 
 
     vkr = vt->BindImageMemory(Unwrap(device), Unwrap(bb), Unwrap(bbmem), 0);
     CHECK_VKR(driver, vkr);
+
+    // Export the bb memory as a dmabuf fd for sharing with Qt.
+    if(dmabufExport)
+    {
+      VkMemoryGetFdInfoKHR getFdInfo = {
+          VK_STRUCTURE_TYPE_MEMORY_GET_FD_INFO_KHR,
+          NULL,
+          Unwrap(bbmem),
+          VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
+      };
+
+      // vkGetMemoryFdKHR is on the device dispatch table.
+      PFN_vkGetMemoryFdKHR getMemFd =
+          (PFN_vkGetMemoryFdKHR)vt->GetDeviceProcAddr(Unwrap(device), "vkGetMemoryFdKHR");
+
+      if(getMemFd)
+      {
+        vkr = getMemFd(Unwrap(device), &getFdInfo, &dmabufFd);
+        CHECK_VKR(driver, vkr);
+      }
+
+      // Query stride for the linear layout.
+      VkImageSubresource subRes = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0};
+      VkSubresourceLayout layout = {};
+      vt->GetImageSubresourceLayout(Unwrap(device), Unwrap(bb), &subRes, &layout);
+      dmabufStride = (uint32_t)layout.rowPitch;
+    }
 
     bbBarrier.image = Unwrap(bb);
     bbBarrier.oldLayout = bbBarrier.newLayout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -1188,6 +1241,15 @@ void VulkanReplay::FlipOutputWindow(uint64_t id)
 
   OutputWindow &outw = it->second;
 
+  // Dmabuf export outputs have no swapchain. Flush pending GPU work so the
+  // dmabuf contents are available for the importing device to read.
+  if(outw.dmabufExport)
+  {
+    m_pDriver->SubmitCmds();
+    m_pDriver->FlushQ();
+    return;
+  }
+
   // if the swapchain failed to create, do nothing. We will try to recreate it
   // again in CheckResizeOutputWindow (once per render 'frame')
   if(outw.swap == VK_NULL_HANDLE)
@@ -1358,6 +1420,16 @@ uint64_t VulkanReplay::MakeOutputWindow(WindowingData window, bool depth)
   m_OutputWindows[id].m_WindowSystem = window.system;
   m_OutputWindows[id].m_ResourceManager = GetResourceManager();
 
+  // When running under Wayland with headless output, enable dmabuf export
+  // so the rendered content can be shared with Qt's compositor via
+  // QRhiWidget without creating wl_subsurfaces.
+  if(window.system == WindowingSystem::Headless &&
+     RenderDoc::Inst().GetGlobalEnvironment().waylandDisplay != NULL &&
+     m_pDriver->m_EnabledExtensions.ext_KHR_external_memory_fd)
+  {
+    m_OutputWindows[id].dmabufExport = true;
+  }
+
   if(window.system != WindowingSystem::Unknown && window.system != WindowingSystem::Headless)
     m_OutputWindows[id].SetWindowHandle(window);
 
@@ -1382,4 +1454,22 @@ uint64_t VulkanReplay::MakeOutputWindow(WindowingData window, bool depth)
   }
 
   return id;
+}
+
+int VulkanReplay::GetOutputWindowDmabufFd(uint64_t id)
+{
+  auto it = m_OutputWindows.find(id);
+  if(id == 0 || it == m_OutputWindows.end())
+    return -1;
+
+  return it->second.dmabufFd;
+}
+
+int VulkanReplay::GetOutputWindowDmabufStride(uint64_t id)
+{
+  auto it = m_OutputWindows.find(id);
+  if(id == 0 || it == m_OutputWindows.end())
+    return 0;
+
+  return (int)it->second.dmabufStride;
 }

@@ -183,12 +183,27 @@ static void StripUnwantedExtensions(rdcarray<rdcstr> &Extensions)
     // remove platform-specific external extensions, as we don't replay external objects. We leave
     // the base extensions since they're widely supported and we don't strip all uses of e.g.
     // feature structs.
-    if(ext == "VK_KHR_external_fence_fd" || ext == "VK_KHR_external_fence_win32" ||
-       ext == "VK_KHR_external_memory_fd" || ext == "VK_KHR_external_memory_win32" ||
-       ext == "VK_KHR_external_semaphore_fd" || ext == "VK_KHR_external_semaphore_win32" ||
-       ext == "VK_KHR_win32_keyed_mutex" || ext == "VK_EXT_external_memory_dma_buf")
+    // On Wayland we keep VK_KHR_external_memory_fd and VK_EXT_external_memory_dma_buf
+    // because the replay output uses dmabuf export to share rendered frames with Qt's
+    // compositor without creating wl_subsurfaces.
     {
-      return true;
+      bool waylandDmabuf = RenderDoc::Inst().GetGlobalEnvironment().waylandDisplay != NULL;
+
+      if(ext == "VK_KHR_external_fence_fd" || ext == "VK_KHR_external_fence_win32" ||
+         ext == "VK_KHR_external_semaphore_fd" || ext == "VK_KHR_external_semaphore_win32" ||
+         ext == "VK_KHR_win32_keyed_mutex")
+      {
+        return true;
+      }
+
+      if(!waylandDmabuf &&
+         (ext == "VK_KHR_external_memory_fd" || ext == "VK_EXT_external_memory_dma_buf"))
+      {
+        return true;
+      }
+
+      if(ext == "VK_KHR_external_memory_win32")
+        return true;
     }
 
     // remove WSI-only extensions
@@ -4622,7 +4637,7 @@ VkResult WrappedVulkan::vkCreateDevice(VkPhysicalDevice physicalDevice,
   rdcarray<const char *> Extensions(createInfo.ppEnabledExtensionNames,
                                     createInfo.enabledExtensionCount);
 
-  // enable VK_KHR_driver_properties if it's available
+  // enable optional extensions if available
   {
     uint32_t count = 0;
     ObjDisp(physicalDevice)
@@ -4632,12 +4647,30 @@ VkResult WrappedVulkan::vkCreateDevice(VkPhysicalDevice physicalDevice,
     ObjDisp(physicalDevice)
         ->EnumerateDeviceExtensionProperties(Unwrap(physicalDevice), NULL, &count, props);
 
+    bool waylandDmabuf = RenderDoc::Inst().GetGlobalEnvironment().waylandDisplay != NULL;
+
     for(uint32_t e = 0; e < count; e++)
     {
       if(!strcmp(props[e].extensionName, VK_KHR_DRIVER_PROPERTIES_EXTENSION_NAME))
-      {
         Extensions.push_back(VK_KHR_DRIVER_PROPERTIES_EXTENSION_NAME);
-        break;
+
+      // On Wayland we need dmabuf export for zero-copy rendering into Qt widgets.
+      // Guard against duplicates if the capture already had these extensions.
+      if(waylandDmabuf)
+      {
+        auto addIfMissing = [&Extensions](const char *name) {
+          for(const char *e : Extensions)
+            if(!strcmp(e, name))
+              return;
+          Extensions.push_back(name);
+        };
+
+        if(!strcmp(props[e].extensionName, VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME))
+          addIfMissing(VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME);
+        if(!strcmp(props[e].extensionName, VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME))
+          addIfMissing(VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME);
+        if(!strcmp(props[e].extensionName, VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME))
+          addIfMissing(VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME);
       }
     }
 

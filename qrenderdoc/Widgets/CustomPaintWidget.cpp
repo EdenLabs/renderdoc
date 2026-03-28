@@ -25,12 +25,17 @@
 #include "CustomPaintWidget.h"
 #include <math.h>
 #include <QEvent>
+#include <QGuiApplication>
 #include <QPainter>
 #include <QPointer>
 #include <QResizeEvent>
 #include <QVBoxLayout>
 #include "Code/Interface/QRDInterface.h"
 #include "Code/QRDUtils.h"
+
+#if defined(RENDERDOC_WAYLAND_UI)
+#include "RenderDocRhiWidget.h"
+#endif
 
 CustomPaintWidgetInternal::CustomPaintWidgetInternal(CustomPaintWidget &parentCustom, bool rendering)
     : m_Custom(parentCustom), m_Rendering(rendering)
@@ -107,16 +112,41 @@ void CustomPaintWidget::OnEventChanged(uint32_t eventId)
 
 void CustomPaintWidget::update()
 {
-  m_Internal->update();
+#if defined(RENDERDOC_WAYLAND_UI)
+  if(m_RhiWidget)
+  {
+    m_RhiWidget->update();
+    QWidget::update();
+    return;
+  }
+#endif
+
+  if(m_Internal)
+    m_Internal->update();
   QWidget::update();
 }
 
+#if defined(RENDERDOC_WAYLAND_UI)
+bool CustomPaintWidget::useRhiWidget() const
+{
+  return QGuiApplication::platformName() == QLatin1String("wayland");
+}
+#endif
+
 WindowingData CustomPaintWidget::GetWidgetWindowingData()
 {
-  // switch to rendering here and recreate the widget, so we have an updated winId for the windowing
-  // data
   m_Rendering = true;
   RecreateInternalWidget();
+
+#if defined(RENDERDOC_WAYLAND_UI)
+  // On Wayland, use headless output with dmabuf export instead of a
+  // wl_surface to avoid creating native child widgets (subsurfaces).
+  if(useRhiWidget())
+    return CreateHeadlessWindowingData(width(), height());
+#endif
+
+  // switch to rendering here and recreate the widget, so we have an updated winId for the windowing
+  // data
   return m_Ctx->CreateWindowingData(m_Internal);
 }
 
@@ -126,6 +156,18 @@ void CustomPaintWidget::SetOutput(IReplayOutput *out)
   m_Rendering = (out != NULL);
 
   RecreateInternalWidget();
+
+#if defined(RENDERDOC_WAYLAND_UI)
+  // Feed the dmabuf fd to the RhiWidget after the output is created.
+  if(m_RhiWidget && m_Output)
+  {
+    int fd = m_Output->GetDmabufFd();
+    int stride = m_Output->GetDmabufStride();
+    auto dims = m_Output->GetDimensions();
+    if(fd >= 0)
+      m_RhiWidget->setDmabuf(fd, (uint32_t)dims.first, (uint32_t)dims.second, (uint32_t)stride);
+  }
+#endif
 }
 
 void CustomPaintWidget::RecreateInternalWidget()
@@ -139,6 +181,39 @@ void CustomPaintWidget::RecreateInternalWidget()
   // if no capture is loaded, or we've encountered a fatal error, we're not rendering anymore.
   m_Rendering = m_Rendering && m_Ctx && m_Ctx->IsCaptureLoaded() && m_Ctx->GetFatalError().OK();
 
+#if defined(RENDERDOC_WAYLAND_UI)
+  if(useRhiWidget())
+  {
+    // On Wayland, use QRhiWidget for rendering to avoid wl_subsurfaces.
+    // Non-rendering state uses the regular internal widget for checkerboard.
+    if(m_Rendering)
+    {
+      if(!m_RhiWidget)
+      {
+        delete m_Internal;
+        m_Internal = NULL;
+
+        m_RhiWidget = new RenderDocRhiWidget(this);
+        m_RhiWidget->setMouseTracking(true);
+        layout()->addWidget(m_RhiWidget);
+      }
+    }
+    else
+    {
+      if(m_RhiWidget || m_Internal == NULL)
+      {
+        delete m_RhiWidget;
+        m_RhiWidget = NULL;
+
+        delete m_Internal;
+        m_Internal = new CustomPaintWidgetInternal(*this, false);
+        layout()->addWidget(m_Internal);
+      }
+    }
+    return;
+  }
+#endif
+
   // we need to recreate the widget if it's not matching out rendering state.
   if(m_Internal == NULL || m_Rendering != m_Internal->IsRendering())
   {
@@ -147,6 +222,18 @@ void CustomPaintWidget::RecreateInternalWidget()
 
     layout()->addWidget(m_Internal);
   }
+}
+
+void CustomPaintWidget::resizeEvent(QResizeEvent *e)
+{
+#if defined(RENDERDOC_WAYLAND_UI)
+  // For the RhiWidget path, push dimensions from the parent widget's
+  // resize event since there's no CustomPaintWidgetInternal to do it.
+  if(m_RhiWidget && m_Output)
+    m_Output->SetDimensions(e->size().width(), e->size().height());
+#endif
+
+  QWidget::resizeEvent(e);
 }
 
 void CustomPaintWidget::changeEvent(QEvent *event)
@@ -166,7 +253,25 @@ void CustomPaintWidget::renderInternal(QPaintEvent *e)
     QPointer<CustomPaintWidget> me(this);
     m_Ctx->Replay().AsyncInvoke(m_Tag, [me](IReplayController *r) {
       if(me && me->m_Output && me->m_Ctx->IsCaptureLoaded())
+      {
         me->m_Output->Display();
+
+#if defined(RENDERDOC_WAYLAND_UI)
+        // After rendering completes, tell the RhiWidget to repaint with the
+        // new dmabuf contents.
+        if(me->m_RhiWidget)
+        {
+          int fd = me->m_Output->GetDmabufFd();
+          int stride = me->m_Output->GetDmabufStride();
+          auto dims = me->m_Output->GetDimensions();
+          GUIInvoke::call(me, [me, fd, stride, dims]() {
+            if(me && me->m_RhiWidget && fd >= 0)
+              me->m_RhiWidget->setDmabuf(fd, (uint32_t)dims.first, (uint32_t)dims.second,
+                                          (uint32_t)stride);
+          });
+        }
+#endif
+      }
     });
   }
 }

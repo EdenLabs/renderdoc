@@ -61,6 +61,8 @@ public:
   ResourceId GetCustomShaderTexID();
   ResourceId GetDebugOverlayTexID();
   rdcpair<uint32_t, uint32_t> PickVertex(uint32_t x, uint32_t y);
+  int GetDmabufFd();
+  int GetDmabufStride();
 
 private:
   ReplayOutput(ReplayController *parent, WindowingData window, ReplayOutputType type);

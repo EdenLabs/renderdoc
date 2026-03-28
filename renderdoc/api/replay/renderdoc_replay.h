@@ -384,6 +384,25 @@ Should only be called for mesh outputs.
 )");
   virtual rdcpair<uint32_t, uint32_t> PickVertex(uint32_t x, uint32_t y) = 0;
 
+  DOCUMENT(R"(Retrieve the dmabuf file descriptor for the output's backbuffer, if available.
+
+Used on Wayland to share the rendered output with Qt's compositor via QRhiWidget without
+creating wl_subsurfaces. Returns -1 if dmabuf export is not active.
+
+:return: The dmabuf file descriptor, or -1 if not available.
+:rtype: int
+)");
+  virtual int GetDmabufFd() = 0;
+
+  DOCUMENT(R"(Retrieve the row stride in bytes of the dmabuf backbuffer.
+
+Only valid when :meth:`GetDmabufFd` returns a valid fd.
+
+:return: The row stride in bytes.
+:rtype: int
+)");
+  virtual int GetDmabufStride() = 0;
+
   static const uint32_t NoResult = ~0U;
 
 protected:
