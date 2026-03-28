@@ -74,6 +74,7 @@
 #endif
 
 #if defined(RENDERDOC_WAYLAND_UI)
+#include <QPlatformSurfaceEvent>
 #include <QtWaylandClient/private/qwaylandwindow_p.h>
 extern "C" {
 #include "xdg-decoration-unstable-v1-client-protocol.h"
@@ -100,20 +101,48 @@ static void decorationConfigure(void *, struct zxdg_toplevel_decoration_v1 *, ui
 static const struct zxdg_toplevel_decoration_v1_listener s_decorationListener = {
     decorationConfigure};
 
-// Request server-side decorations from the Wayland compositor. Qt6 has a CSD
-// bug where the titlebar is drawn twice. The main window must have
-// Qt::FramelessWindowHint set BEFORE being shown so that Qt does not create
-// its own xdg_toplevel_decoration (which would conflict with ours).
-static void requestWaylandSSD(QWidget *window, struct wl_display *display)
+// Active decoration object for the main window. Must be destroyed before
+// Qt tears down the xdg_toplevel, otherwise the compositor raises a
+// protocol error.
+static struct zxdg_toplevel_decoration_v1 *s_activeDecoration = nullptr;
+
+static void destroyWaylandSSD()
 {
-  // Bind to the xdg-decoration manager global.
+  if(s_activeDecoration)
+  {
+    zxdg_toplevel_decoration_v1_destroy(s_activeDecoration);
+    s_activeDecoration = nullptr;
+  }
+}
+
+// Bind to the xdg-decoration manager global. Only needs to happen once.
+static void ensureDecorationManager(struct wl_display *display)
+{
+  if(s_decorationManager)
+    return;
+
   struct wl_registry *registry = wl_display_get_registry(display);
   wl_registry_add_listener(registry, &s_registryListener, nullptr);
   wl_display_roundtrip(display);
   wl_registry_destroy(registry);
+}
+
+// Request server-side decorations from the Wayland compositor. Qt6 has a CSD
+// bug where the titlebar is drawn twice. The main window must have
+// Qt::FramelessWindowHint set BEFORE being shown so that Qt does not create
+// its own xdg_toplevel_decoration (which would conflict with ours).
+//
+// Safe to call repeatedly. Destroys any existing decoration first and
+// creates a new one for the current xdg_toplevel.
+static void requestWaylandSSD(QWidget *window, struct wl_display *display)
+{
+  ensureDecorationManager(display);
 
   if(!s_decorationManager)
     return;
+
+  // Tear down any previous decoration (toplevel may have been rebuilt).
+  destroyWaylandSSD();
 
   // Get the xdg_toplevel via Qt's private QWaylandWindow API.
   auto *waylandWindow =
@@ -127,13 +156,57 @@ static void requestWaylandSSD(QWidget *window, struct wl_display *display)
     return;
 
   // Create decoration, attach listener, and request server-side mode.
-  struct zxdg_toplevel_decoration_v1 *decoration =
+  s_activeDecoration =
       zxdg_decoration_manager_v1_get_toplevel_decoration(s_decorationManager, *xdgToplevel);
-  zxdg_toplevel_decoration_v1_add_listener(decoration, &s_decorationListener, nullptr);
-  zxdg_toplevel_decoration_v1_set_mode(decoration,
+  zxdg_toplevel_decoration_v1_add_listener(s_activeDecoration, &s_decorationListener, nullptr);
+  zxdg_toplevel_decoration_v1_set_mode(s_activeDecoration,
                                        ZXDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
   wl_display_flush(display);
 }
+
+// Event filter that tracks the main window's platform surface lifecycle.
+// Destroys the decoration before Qt tears down the xdg_toplevel and
+// re-requests SSD when Qt recreates it.
+//
+// We must destroy the decoration before the xdg_toplevel is destroyed.
+// Qt tears down the shell surface (xdg_toplevel) before the wl_surface,
+// so PlatformSurface::SurfaceAboutToBeDestroyed fires too late. Instead
+// we hook QEvent::Close (fires before Qt's window teardown) and
+// QEvent::Show (fires after Qt recreates the window).
+class WaylandSSDFilter : public QObject
+{
+  QWidget *m_Window;
+  struct wl_display *m_Display;
+
+public:
+  WaylandSSDFilter(QWidget *window, struct wl_display *display, QObject *parent)
+      : QObject(parent), m_Window(window), m_Display(display)
+  {
+  }
+
+  bool eventFilter(QObject *obj, QEvent *ev) override
+  {
+    if(ev->type() == QEvent::Close)
+    {
+      destroyWaylandSSD();
+    }
+    else if(ev->type() == QEvent::PlatformSurface)
+    {
+      auto *pse = static_cast<QPlatformSurfaceEvent *>(ev);
+      if(pse->surfaceEventType() == QPlatformSurfaceEvent::SurfaceAboutToBeDestroyed)
+      {
+        // Catch non-close teardowns (e.g. window flag changes that cause
+        // Qt to rebuild the xdg_toplevel).
+        destroyWaylandSSD();
+      }
+      else if(pse->surfaceEventType() == QPlatformSurfaceEvent::SurfaceCreated)
+      {
+        requestWaylandSSD(m_Window, m_Display);
+      }
+    }
+    return false;
+  }
+};
 #endif
 
 #include "pipestate.inl"
@@ -330,7 +403,17 @@ void CaptureContext::Begin(QString paramFilename, QString remoteHost, uint32_t r
     auto *waylandApp =
         qApp->nativeInterface<QNativeInterface::QWaylandApplication>();
     if(waylandApp)
-      requestWaylandSSD(m_MainWindow->Widget(), waylandApp->display());
+    {
+      QWidget *win = m_MainWindow->Widget();
+      struct wl_display *display = waylandApp->display();
+
+      requestWaylandSSD(win, display);
+
+      // Track the platform surface lifecycle so we can destroy the decoration
+      // before Qt tears down the xdg_toplevel and re-request SSD when it
+      // recreates the surface.
+      win->window()->installEventFilter(new WaylandSSDFilter(win, display, win));
+    }
   }
 #endif
 
