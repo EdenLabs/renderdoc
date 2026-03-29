@@ -330,6 +330,13 @@ private:
 
   AreaReferenceType currentHotspot();
 
+  // Convert a global-coordinate point to the coordinate space of the
+  // overlay parent widget. When overlays are top-level windows (X11),
+  // global coords are used directly. When overlays are children of the
+  // main window (Wayland), we map from global to the parent widget.
+  QPoint overlayPos(const QPoint &globalPos);
+  QRect overlayRect(const QRect &globalRect);
+
   void updateDragPosition();
   void abortDrag();
   void finishDrag();

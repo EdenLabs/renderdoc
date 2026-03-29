@@ -835,6 +835,29 @@ void ToolWindowManager::startDrag(const QList<QWidget *> &toolWindows,
   m_draggedToolWindows.clear();
   for(QWidget *w : toolWindows)
     m_draggedToolWindows.push_back(w);
+
+#if defined(RENDERDOC_WAYLAND_UI)
+  // On Wayland, reparent overlays to the main window so they can be
+  // positioned using window-relative coordinates. Top-level windows
+  // cannot be freely positioned on Wayland.
+  if(QGuiApplication::platformName() == QLatin1String("wayland"))
+  {
+    QWidget *mainWin = window();
+    auto reparent = [mainWin](QWidget *w) {
+      if(w && w->parentWidget() != mainWin)
+      {
+        w->setParent(mainWin);
+        // Restore visual properties lost during reparent.
+        w->setAttribute(Qt::WA_AlwaysStackOnTop);
+      }
+    };
+    reparent(m_previewOverlay);
+    reparent(m_previewTabOverlay);
+    for(int i = 0; i < NumReferenceTypes; i++)
+      reparent(m_dropHotspots[i]);
+  }
+#endif
+
   qApp->installEventFilter(this);
 }
 
@@ -1050,6 +1073,7 @@ void ToolWindowManager::updateDragPosition()
     QRect wrapperGeometry;
     wrapperGeometry.setSize(wrapper->rect().size());
     wrapperGeometry.moveTo(wrapper->mapToGlobal(QPoint(0, 0)));
+    wrapperGeometry = overlayRect(wrapperGeometry);
 
     const int margin = m_dropHotspotMargin;
 
@@ -1063,6 +1087,7 @@ void ToolWindowManager::updateDragPosition()
       // calculate the rect of the area
       areaClientRect.setTopLeft(m_hoverArea->mapToGlobal(QPoint(0, 0)));
       areaClientRect.setSize(m_hoverArea->rect().size());
+      areaClientRect = overlayRect(areaClientRect);
 
       // subtract the rect for the tab bar.
       areaClientRect.adjust(0, m_hoverArea->tabBar()->rect().height(), 0, 0);
@@ -1140,6 +1165,7 @@ void ToolWindowManager::updateDragPosition()
 
     QRect g = parent->geometry();
     g.moveTopLeft(parent->parentWidget()->mapToGlobal(g.topLeft()));
+    g = overlayRect(g);
 
     if(hotspot == LeftOf)
       g.adjust(0, 0, -g.width() / 2, 0);
@@ -1163,6 +1189,7 @@ void ToolWindowManager::updateDragPosition()
       {
         tabGeom = tb->tabRect(m_hoverArea->count() - 1);
         tabGeom.moveTo(tb->mapToGlobal(QPoint(0, 0)) + tabGeom.topLeft());
+        tabGeom = overlayRect(tabGeom);
 
         // move the tab one to the right, to indicate the tab is being added after the last one.
         tabGeom.moveLeft(tabGeom.left() + tabGeom.width());
@@ -1175,6 +1202,7 @@ void ToolWindowManager::updateDragPosition()
       {
         tabGeom = tb->tabRect(idx);
         tabGeom.moveTo(tb->mapToGlobal(QPoint(0, 0)) + tabGeom.topLeft());
+        tabGeom = overlayRect(tabGeom);
       }
     }
 
@@ -1192,6 +1220,7 @@ void ToolWindowManager::updateDragPosition()
     QRect g;
     g.moveTopLeft(wrapper->mapToGlobal(QPoint()));
     g.setSize(wrapper->rect().size());
+    g = overlayRect(g);
 
     if(hotspot == LeftWindowSide)
       g.adjust(0, 0, -(g.width() * 5) / 6, 0);
@@ -1228,7 +1257,10 @@ void ToolWindowManager::updateDragPosition()
         if(w && w->isVisible())
           r = r.united(w->rect());
       }
-      m_previewOverlay->setGeometry(pos.x(), pos.y(), r.width(), r.height());
+      {
+        QPoint opos = overlayPos(pos);
+        m_previewOverlay->setGeometry(opos.x(), opos.y(), r.width(), r.height());
+      }
     }
     m_previewTabOverlay->setGeometry(QRect());
   }
@@ -1250,9 +1282,26 @@ void ToolWindowManager::abortDrag()
   for(QWidget *hotspot : m_dropHotspots)
     if(hotspot)
       hotspot->hide();
+
+#if defined(RENDERDOC_WAYLAND_UI)
+  // Reparent overlays back to top-level so they don't interfere with
+  // mouse events in the main window.
+  if(QGuiApplication::platformName() == QLatin1String("wayland"))
+  {
+    m_previewOverlay->setParent(nullptr);
+    m_previewTabOverlay->setParent(nullptr);
+    for(int i = 0; i < NumReferenceTypes; i++)
+      if(m_dropHotspots[i])
+        m_dropHotspots[i]->setParent(nullptr);
+  }
+#endif
+
   m_draggedToolWindows.clear();
   m_draggedWrapper = NULL;
   qApp->removeEventFilter(this);
+
+  // Ensure focus returns to the main content after drag ends.
+  window()->activateWindow();
 }
 
 void ToolWindowManager::finishDrag()
@@ -1291,6 +1340,17 @@ void ToolWindowManager::finishDrag()
   for(QWidget *h : m_dropHotspots)
     if(h)
       h->hide();
+
+#if defined(RENDERDOC_WAYLAND_UI)
+  if(QGuiApplication::platformName() == QLatin1String("wayland"))
+  {
+    m_previewOverlay->setParent(nullptr);
+    m_previewTabOverlay->setParent(nullptr);
+    for(int i = 0; i < NumReferenceTypes; i++)
+      if(m_dropHotspots[i])
+        m_dropHotspots[i]->setParent(nullptr);
+  }
+#endif
 
   if(hotspot == NewFloatingArea)
   {
@@ -1336,6 +1396,9 @@ void ToolWindowManager::finishDrag()
       moveToolWindows(draggedToolWindows, AreaReference(EmptySpace));
     }
   }
+
+  // Ensure focus returns to the main content after drag ends.
+  window()->activateWindow();
 }
 
 void ToolWindowManager::drawHotspotPixmaps()
@@ -1439,16 +1502,39 @@ void ToolWindowManager::drawHotspotPixmaps()
   m_pixmaps[BottomWindowSide] = m_pixmaps[BottomOf];
 }
 
+QPoint ToolWindowManager::overlayPos(const QPoint &globalPos)
+{
+  QWidget *parent = m_previewOverlay->parentWidget();
+  return parent ? parent->mapFromGlobal(globalPos) : globalPos;
+}
+
+QRect ToolWindowManager::overlayRect(const QRect &globalRect)
+{
+  QWidget *parent = m_previewOverlay->parentWidget();
+  if(!parent)
+    return globalRect;
+  QRect r = globalRect;
+  r.moveTopLeft(parent->mapFromGlobal(r.topLeft()));
+  return r;
+}
+
 ToolWindowManager::AreaReferenceType ToolWindowManager::currentHotspot()
 {
   QPoint pos = QCursor::pos();
 
   for(int i = 0; i < NumReferenceTypes; i++)
   {
-    if(m_dropHotspots[i] && m_dropHotspots[i]->isVisible() &&
-       m_dropHotspots[i]->geometry().contains(pos))
+    if(m_dropHotspots[i] && m_dropHotspots[i]->isVisible())
     {
-      return (ToolWindowManager::AreaReferenceType)i;
+      // For child-widget overlays (Wayland), use mapFromGlobal to test
+      // the cursor against the hotspot in its parent's coordinate space.
+      QPoint local = m_dropHotspots[i]->parentWidget()
+                         ? m_dropHotspots[i]->parentWidget()->mapFromGlobal(pos)
+                         : pos;
+      if(m_dropHotspots[i]->geometry().contains(local))
+      {
+        return (ToolWindowManager::AreaReferenceType)i;
+      }
     }
   }
 

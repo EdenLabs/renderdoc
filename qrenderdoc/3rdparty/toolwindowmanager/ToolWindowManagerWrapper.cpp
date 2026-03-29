@@ -25,6 +25,7 @@
 #include "ToolWindowManagerWrapper.h"
 #include <QApplication>
 #include <QDebug>
+#include <QGuiApplication>
 #include <QDragEnterEvent>
 #include <QMimeData>
 #include <QSplitter>
@@ -44,6 +45,13 @@ ToolWindowManagerWrapper::ToolWindowManagerWrapper(ToolWindowManager *manager, b
   flags = Qt::Dialog;
   flags |= Qt::CustomizeWindowHint | Qt::WindowTitleHint | Qt::WindowCloseButtonHint |
            Qt::WindowMaximizeButtonHint;
+#elif defined(RENDERDOC_WAYLAND_UI)
+  // On Wayland, use compositor-drawn (SSD) titlebars for floating windows.
+  // The custom-painted CSD titlebar doesn't render correctly.
+  if(QGuiApplication::platformName() == QLatin1String("wayland"))
+    flags |= Qt::WindowCloseButtonHint;
+  else
+    flags |= Qt::FramelessWindowHint;
 #else
   flags |= Qt::FramelessWindowHint;
 #endif
