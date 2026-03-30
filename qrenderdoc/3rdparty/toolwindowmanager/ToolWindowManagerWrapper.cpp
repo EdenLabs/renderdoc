@@ -100,6 +100,11 @@ ToolWindowManagerWrapper::ToolWindowManagerWrapper(ToolWindowManager *manager, b
   {
     installEventFilter(this);
     updateTitle();
+
+#if defined(RENDERDOC_WAYLAND_UI)
+    if(QGuiApplication::platformName() == QLatin1String("wayland"))
+      setAcceptDrops(true);
+#endif
   }
 }
 
@@ -504,6 +509,44 @@ void ToolWindowManagerWrapper::moveTimeout()
     m_moveTimeout->stop();
   }
 }
+
+#if defined(RENDERDOC_WAYLAND_UI)
+void ToolWindowManagerWrapper::dragEnterEvent(QDragEnterEvent *event)
+{
+  if(m_manager->dragInProgress() &&
+     event->mimeData()->hasFormat(QStringLiteral("application/x-toolwindowmanager-drag")))
+  {
+    event->acceptProposedAction();
+    // Wrapper is itself a top-level window, so positions are already window-local.
+    m_manager->dragTo(this, event->position().toPoint());
+  }
+}
+
+void ToolWindowManagerWrapper::dragMoveEvent(QDragMoveEvent *event)
+{
+  if(m_manager->dragInProgress())
+  {
+    m_manager->dragTo(this, event->position().toPoint());
+    event->acceptProposedAction();
+  }
+}
+
+void ToolWindowManagerWrapper::dragLeaveEvent(QDragLeaveEvent *)
+{
+  if(m_manager->dragInProgress())
+    m_manager->endDragTo();
+}
+
+void ToolWindowManagerWrapper::dropEvent(QDropEvent *event)
+{
+  if(m_manager->dragInProgress())
+  {
+    m_manager->m_dragCursorLocalPos = event->position().toPoint();
+    m_manager->finishDrag();
+    event->acceptProposedAction();
+  }
+}
+#endif
 
 ToolWindowManagerWrapper::ResizeDirection ToolWindowManagerWrapper::checkResize()
 {

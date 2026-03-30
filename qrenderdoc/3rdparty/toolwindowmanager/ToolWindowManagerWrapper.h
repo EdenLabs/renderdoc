@@ -64,6 +64,13 @@ protected:
   virtual void paintEvent(QPaintEvent *) Q_DECL_OVERRIDE;
   virtual void resizeEvent(QResizeEvent *) Q_DECL_OVERRIDE;
 
+#if defined(RENDERDOC_WAYLAND_UI)
+  void dragEnterEvent(QDragEnterEvent *event) override;
+  void dragMoveEvent(QDragMoveEvent *event) override;
+  void dragLeaveEvent(QDragLeaveEvent *event) override;
+  void dropEvent(QDropEvent *event) override;
+#endif
+
 private:
   ToolWindowManager *m_manager;
 

@@ -23,6 +23,7 @@
  *
  */
 #include "ToolWindowManager.h"
+#include <QGuiApplication>
 #include <QMouseEvent>
 #include <QStyle>
 #include <QStyleOption>
@@ -417,7 +418,15 @@ bool ToolWindowManagerTabBar::floatingWindowChild() const
         qobject_cast<ToolWindowManagerWrapper *>(area->parentWidget());
 
     if(wrapper && wrapper->floating())
+    {
+#if defined(RENDERDOC_WAYLAND_UI)
+      // On Wayland with SSD, floating windows have no custom title bar.
+      // Keep the tab bar visible so it serves as a drag handle for docking.
+      if(QGuiApplication::platformName() == QLatin1String("wayland"))
+        return false;
+#endif
       return true;
+    }
   }
 
   return false;

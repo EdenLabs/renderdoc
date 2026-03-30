@@ -297,6 +297,13 @@ private:
   // the wrapper if a whole float window is being dragged
   QPointer<ToolWindowManagerWrapper> m_draggedWrapper;
   QPointer<ToolWindowManagerArea> m_hoverArea;    // the area currently being hovered over in a drag
+
+  // Wayland drag coordinate tracking. On Wayland, global coordinates are
+  // unreliable across windows, so we track which top-level window the
+  // cursor is in and use window-local coordinates for hit testing.
+  QPointer<QWidget> m_dragCursorWindow;    // top-level window the cursor is over
+  QPoint m_dragCursorLocalPos;             // cursor position relative to m_dragCursorWindow
+  bool m_dndDragActive = false;            // true during QDrag::exec() on Wayland
   // a semi-transparent preview of where the dragged toolwindow(s) will be docked
   QWidget *m_previewOverlay;
   QWidget *m_previewTabOverlay;
@@ -330,12 +337,20 @@ private:
 
   AreaReferenceType currentHotspot();
 
-  // Convert a global-coordinate point to the coordinate space of the
-  // overlay parent widget. When overlays are top-level windows (X11),
-  // global coords are used directly. When overlays are children of the
-  // main window (Wayland), we map from global to the parent widget.
-  QPoint overlayPos(const QPoint &globalPos);
-  QRect overlayRect(const QRect &globalRect);
+  // Wayland local-coordinate helpers. These abstract the coordinate space
+  // used during drag operations. On X11, they forward to mapToGlobal /
+  // mapFromGlobal / QCursor::pos(). On Wayland, they use window-local
+  // coordinates relative to m_dragCursorWindow.
+  QPoint dragPos();
+  QPoint mapToDrag(const QWidget *widget, const QPoint &pos);
+  QPoint mapFromDrag(const QWidget *widget, const QPoint &pos);
+  bool isInDragWindow(const QWidget *widget);
+  void reparentOverlays(QWidget *newParent);
+
+  // Internal helpers for DnD-based drag on Wayland. These bridge Qt's DnD
+  // events into the existing drag coordinate system.
+  void dragTo(QWidget *window, const QPoint &windowLocalPos);
+  void endDragTo();
 
   void updateDragPosition();
   void abortDrag();
@@ -347,6 +362,13 @@ private:
 protected:
   //! Event filter for grabbing and processing drag aborts.
   virtual bool eventFilter(QObject *object, QEvent *event);
+
+#if defined(RENDERDOC_WAYLAND_UI)
+  void dragEnterEvent(QDragEnterEvent *event) override;
+  void dragMoveEvent(QDragMoveEvent *event) override;
+  void dragLeaveEvent(QDragLeaveEvent *event) override;
+  void dropEvent(QDropEvent *event) override;
+#endif
 
   /*!
    * \brief Creates new splitter and sets its default properties. You may reimplement

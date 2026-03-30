@@ -26,7 +26,9 @@
 #include <QApplication>
 #include <QDebug>
 #include <QDrag>
+#include <QDragEnterEvent>
 #include <QEvent>
+#include <QGuiApplication>
 #include <QMetaMethod>
 #include <QMimeData>
 #include <QMouseEvent>
@@ -110,6 +112,11 @@ ToolWindowManager::ToolWindowManager(QWidget *parent) : QWidget(parent)
     m_dropHotspots[type]->setPixmap(m_pixmaps[type]);
     m_dropHotspots[type]->setFixedSize(m_dropHotspotDimension, m_dropHotspotDimension);
   }
+
+#if defined(RENDERDOC_WAYLAND_UI)
+  if(QGuiApplication::platformName() == QLatin1String("wayland"))
+    setAcceptDrops(true);
+#endif
 }
 
 ToolWindowManager::~ToolWindowManager()
@@ -837,24 +844,15 @@ void ToolWindowManager::startDrag(const QList<QWidget *> &toolWindows,
     m_draggedToolWindows.push_back(w);
 
 #if defined(RENDERDOC_WAYLAND_UI)
-  // On Wayland, reparent overlays to the main window so they can be
-  // positioned using window-relative coordinates. Top-level windows
-  // cannot be freely positioned on Wayland.
+  // On Wayland, initialize cursor window tracking to the window the drag
+  // started in. We won't get an Enter event for a window the cursor is
+  // already over, so we must set this up front.
   if(QGuiApplication::platformName() == QLatin1String("wayland"))
   {
-    QWidget *mainWin = window();
-    auto reparent = [mainWin](QWidget *w) {
-      if(w && w->parentWidget() != mainWin)
-      {
-        w->setParent(mainWin);
-        // Restore visual properties lost during reparent.
-        w->setAttribute(Qt::WA_AlwaysStackOnTop);
-      }
-    };
-    reparent(m_previewOverlay);
-    reparent(m_previewTabOverlay);
-    for(int i = 0; i < NumReferenceTypes; i++)
-      reparent(m_dropHotspots[i]);
+    QWidget *sourceWindow = toolWindows.first()->window();
+    m_dragCursorWindow = sourceWindow;
+    m_dragCursorLocalPos = sourceWindow->mapFromGlobal(QCursor::pos());
+    reparentOverlays(sourceWindow);
   }
 #endif
 
@@ -932,13 +930,16 @@ void ToolWindowManager::updateDragPosition()
   {
     return;
   }
-  if(!(qApp->mouseButtons() & Qt::LeftButton))
+  // During a QDrag on Wayland, the compositor owns the pointer grab and
+  // Qt may not report mouse button state. The drag lifecycle is managed
+  // by QDrag::exec() and our DnD event handlers instead.
+  if(!m_dndDragActive && !(qApp->mouseButtons() & Qt::LeftButton))
   {
     finishDrag();
     return;
   }
 
-  QPoint pos = QCursor::pos();
+  QPoint pos = dragPos();
   m_hoverArea = NULL;
   ToolWindowManagerWrapper *hoverWrapper = NULL;
 
@@ -949,9 +950,14 @@ void ToolWindowManager::updateDragPosition()
     {
       continue;
     }
-    QRect globalAreaRect(area->mapToGlobal(area->rect().topLeft()),
-                         area->mapToGlobal(area->rect().bottomRight()));
-    if(globalAreaRect.contains(pos))
+    // on Wayland, skip areas not in the window the cursor is currently over
+    if(!isInDragWindow(area))
+    {
+      continue;
+    }
+    QRect areaRect(mapToDrag(area, area->rect().topLeft()),
+                   mapToDrag(area, area->rect().bottomRight()));
+    if(areaRect.contains(pos))
     {
       m_hoverArea = area;
       break;
@@ -967,7 +973,11 @@ void ToolWindowManager::updateDragPosition()
       {
         continue;
       }
-      if(wrapper->rect().contains(wrapper->mapFromGlobal(pos)))
+      if(!isInDragWindow(wrapper))
+      {
+        continue;
+      }
+      if(wrapper->rect().contains(mapFromDrag(wrapper, pos)))
       {
         hoverWrapper = wrapper;
         break;
@@ -992,7 +1002,7 @@ void ToolWindowManager::updateDragPosition()
         {
           QSplitterHandle *handle = splitter->handle(h);
 
-          if(handle->rect().contains(handle->mapFromGlobal(pos)))
+          if(handle->rect().contains(mapFromDrag(handle, pos)))
           {
             QWidget *a = splitter->widget(h);
             QWidget *b = splitter->widget(h + 1);
@@ -1033,7 +1043,7 @@ void ToolWindowManager::updateDragPosition()
           {
             QWidget *widget = splitter->widget(w);
 
-            if(widget->rect().contains(widget->mapFromGlobal(pos)))
+            if(widget->rect().contains(mapFromDrag(widget, pos)))
             {
               splitter = qobject_cast<QSplitter *>(widget);
               if(splitter)
@@ -1072,8 +1082,7 @@ void ToolWindowManager::updateDragPosition()
       wrapper = findClosestParent<ToolWindowManagerWrapper *>(m_hoverArea);
     QRect wrapperGeometry;
     wrapperGeometry.setSize(wrapper->rect().size());
-    wrapperGeometry.moveTo(wrapper->mapToGlobal(QPoint(0, 0)));
-    wrapperGeometry = overlayRect(wrapperGeometry);
+    wrapperGeometry.moveTo(mapToDrag(wrapper, QPoint(0, 0)));
 
     const int margin = m_dropHotspotMargin;
 
@@ -1085,9 +1094,8 @@ void ToolWindowManager::updateDragPosition()
       QRect areaClientRect;
 
       // calculate the rect of the area
-      areaClientRect.setTopLeft(m_hoverArea->mapToGlobal(QPoint(0, 0)));
+      areaClientRect.setTopLeft(mapToDrag(m_hoverArea, QPoint(0, 0)));
       areaClientRect.setSize(m_hoverArea->rect().size());
-      areaClientRect = overlayRect(areaClientRect);
 
       // subtract the rect for the tab bar.
       areaClientRect.adjust(0, m_hoverArea->tabBar()->rect().height(), 0, 0);
@@ -1163,9 +1171,7 @@ void ToolWindowManager::updateDragPosition()
     if(parent == NULL)
       parent = hoverWrapper;
 
-    QRect g = parent->geometry();
-    g.moveTopLeft(parent->parentWidget()->mapToGlobal(g.topLeft()));
-    g = overlayRect(g);
+    QRect g(mapToDrag(parent, QPoint(0, 0)), parent->size());
 
     if(hotspot == LeftOf)
       g.adjust(0, 0, -g.width() / 2, 0);
@@ -1183,13 +1189,12 @@ void ToolWindowManager::updateDragPosition()
       QTabBar *tb = m_hoverArea->tabBar();
       g.adjust(0, tb->rect().height(), 0, 0);
 
-      int idx = tb->tabAt(tb->mapFromGlobal(pos));
+      int idx = tb->tabAt(mapFromDrag(tb, pos));
 
       if(idx == -1)
       {
         tabGeom = tb->tabRect(m_hoverArea->count() - 1);
-        tabGeom.moveTo(tb->mapToGlobal(QPoint(0, 0)) + tabGeom.topLeft());
-        tabGeom = overlayRect(tabGeom);
+        tabGeom.moveTo(mapToDrag(tb, QPoint(0, 0)) + tabGeom.topLeft());
 
         // move the tab one to the right, to indicate the tab is being added after the last one.
         tabGeom.moveLeft(tabGeom.left() + tabGeom.width());
@@ -1201,8 +1206,7 @@ void ToolWindowManager::updateDragPosition()
       else
       {
         tabGeom = tb->tabRect(idx);
-        tabGeom.moveTo(tb->mapToGlobal(QPoint(0, 0)) + tabGeom.topLeft());
-        tabGeom = overlayRect(tabGeom);
+        tabGeom.moveTo(mapToDrag(tb, QPoint(0, 0)) + tabGeom.topLeft());
       }
     }
 
@@ -1217,10 +1221,7 @@ void ToolWindowManager::updateDragPosition()
     if(m_hoverArea)
       wrapper = findClosestParent<ToolWindowManagerWrapper *>(m_hoverArea);
 
-    QRect g;
-    g.moveTopLeft(wrapper->mapToGlobal(QPoint()));
-    g.setSize(wrapper->rect().size());
-    g = overlayRect(g);
+    QRect g(mapToDrag(wrapper, QPoint(0, 0)), wrapper->rect().size());
 
     if(hotspot == LeftWindowSide)
       g.adjust(0, 0, -(g.width() * 5) / 6, 0);
@@ -1257,10 +1258,7 @@ void ToolWindowManager::updateDragPosition()
         if(w && w->isVisible())
           r = r.united(w->rect());
       }
-      {
-        QPoint opos = overlayPos(pos);
-        m_previewOverlay->setGeometry(opos.x(), opos.y(), r.width(), r.height());
-      }
+      m_previewOverlay->setGeometry(pos.x(), pos.y(), r.width(), r.height());
     }
     m_previewTabOverlay->setGeometry(QRect());
   }
@@ -1288,11 +1286,9 @@ void ToolWindowManager::abortDrag()
   // mouse events in the main window.
   if(QGuiApplication::platformName() == QLatin1String("wayland"))
   {
-    m_previewOverlay->setParent(nullptr);
-    m_previewTabOverlay->setParent(nullptr);
-    for(int i = 0; i < NumReferenceTypes; i++)
-      if(m_dropHotspots[i])
-        m_dropHotspots[i]->setParent(nullptr);
+    reparentOverlays(nullptr);
+    m_dragCursorWindow = nullptr;
+    m_dragCursorLocalPos = QPoint();
   }
 #endif
 
@@ -1344,11 +1340,9 @@ void ToolWindowManager::finishDrag()
 #if defined(RENDERDOC_WAYLAND_UI)
   if(QGuiApplication::platformName() == QLatin1String("wayland"))
   {
-    m_previewOverlay->setParent(nullptr);
-    m_previewTabOverlay->setParent(nullptr);
-    for(int i = 0; i < NumReferenceTypes; i++)
-      if(m_dropHotspots[i])
-        m_dropHotspots[i]->setParent(nullptr);
+    reparentOverlays(nullptr);
+    m_dragCursorWindow = nullptr;
+    m_dragCursorLocalPos = QPoint();
   }
 #endif
 
@@ -1502,36 +1496,130 @@ void ToolWindowManager::drawHotspotPixmaps()
   m_pixmaps[BottomWindowSide] = m_pixmaps[BottomOf];
 }
 
-QPoint ToolWindowManager::overlayPos(const QPoint &globalPos)
+QPoint ToolWindowManager::dragPos()
 {
-  QWidget *parent = m_previewOverlay->parentWidget();
-  return parent ? parent->mapFromGlobal(globalPos) : globalPos;
+#if defined(RENDERDOC_WAYLAND_UI)
+  if(m_dragCursorWindow)
+    return m_dragCursorLocalPos;
+#endif
+  return QCursor::pos();
 }
 
-QRect ToolWindowManager::overlayRect(const QRect &globalRect)
+QPoint ToolWindowManager::mapToDrag(const QWidget *widget, const QPoint &pos)
 {
-  QWidget *parent = m_previewOverlay->parentWidget();
-  if(!parent)
-    return globalRect;
-  QRect r = globalRect;
-  r.moveTopLeft(parent->mapFromGlobal(r.topLeft()));
-  return r;
+#if defined(RENDERDOC_WAYLAND_UI)
+  if(m_dragCursorWindow)
+    return widget->mapTo(m_dragCursorWindow, pos);
+#endif
+  return widget->mapToGlobal(pos);
 }
+
+QPoint ToolWindowManager::mapFromDrag(const QWidget *widget, const QPoint &pos)
+{
+#if defined(RENDERDOC_WAYLAND_UI)
+  if(m_dragCursorWindow)
+    return widget->mapFrom(m_dragCursorWindow, pos);
+#endif
+  return widget->mapFromGlobal(pos);
+}
+
+bool ToolWindowManager::isInDragWindow(const QWidget *widget)
+{
+#if defined(RENDERDOC_WAYLAND_UI)
+  if(m_dragCursorWindow)
+    return widget->window() == m_dragCursorWindow;
+#endif
+  return true;
+}
+
+void ToolWindowManager::reparentOverlays(QWidget *newParent)
+{
+  auto reparent = [newParent](QWidget *w) {
+    if(w && w->parentWidget() != newParent)
+    {
+      w->setParent(newParent);
+      w->setAttribute(Qt::WA_AlwaysStackOnTop);
+      // Prevent overlays from intercepting DnD events during Wayland drags.
+      // Without this, drag events hit the overlay, propagate to the window
+      // (not the ToolWindowManager), and get lost.
+      w->setAttribute(Qt::WA_TransparentForMouseEvents);
+    }
+  };
+  reparent(m_previewOverlay);
+  reparent(m_previewTabOverlay);
+  for(int i = 0; i < NumReferenceTypes; i++)
+    reparent(m_dropHotspots[i]);
+}
+
+void ToolWindowManager::dragTo(QWidget *win, const QPoint &windowLocalPos)
+{
+  if(win != m_dragCursorWindow)
+  {
+    m_dragCursorWindow = win;
+    reparentOverlays(win);
+  }
+  m_dragCursorLocalPos = windowLocalPos;
+  updateDragPosition();
+}
+
+void ToolWindowManager::endDragTo()
+{
+  m_dragCursorWindow = nullptr;
+  reparentOverlays(window());
+  // Hide hotspots and previews while between windows.
+  for(QWidget *hotspot : m_dropHotspots)
+    if(hotspot)
+      hotspot->hide();
+  m_previewOverlay->hide();
+  m_previewTabOverlay->hide();
+}
+
+#if defined(RENDERDOC_WAYLAND_UI)
+void ToolWindowManager::dragEnterEvent(QDragEnterEvent *event)
+{
+  if(dragInProgress() &&
+     event->mimeData()->hasFormat(QStringLiteral("application/x-toolwindowmanager-drag")))
+  {
+    event->acceptProposedAction();
+    dragTo(window(), mapTo(window(), event->position().toPoint()));
+  }
+}
+
+void ToolWindowManager::dragMoveEvent(QDragMoveEvent *event)
+{
+  if(dragInProgress())
+  {
+    dragTo(window(), mapTo(window(), event->position().toPoint()));
+    event->acceptProposedAction();
+  }
+}
+
+void ToolWindowManager::dragLeaveEvent(QDragLeaveEvent *)
+{
+  if(dragInProgress())
+    endDragTo();
+}
+
+void ToolWindowManager::dropEvent(QDropEvent *event)
+{
+  if(dragInProgress())
+  {
+    m_dragCursorLocalPos = mapTo(window(), event->position().toPoint());
+    finishDrag();
+    event->acceptProposedAction();
+  }
+}
+#endif
 
 ToolWindowManager::AreaReferenceType ToolWindowManager::currentHotspot()
 {
-  QPoint pos = QCursor::pos();
+  QPoint pos = dragPos();
 
   for(int i = 0; i < NumReferenceTypes; i++)
   {
     if(m_dropHotspots[i] && m_dropHotspots[i]->isVisible())
     {
-      // For child-widget overlays (Wayland), use mapFromGlobal to test
-      // the cursor against the hotspot in its parent's coordinate space.
-      QPoint local = m_dropHotspots[i]->parentWidget()
-                         ? m_dropHotspots[i]->parentWidget()->mapFromGlobal(pos)
-                         : pos;
-      if(m_dropHotspots[i]->geometry().contains(local))
+      if(m_dropHotspots[i]->geometry().contains(pos))
       {
         return (ToolWindowManager::AreaReferenceType)i;
       }
@@ -1541,7 +1629,7 @@ ToolWindowManager::AreaReferenceType ToolWindowManager::currentHotspot()
   if(m_hoverArea)
   {
     QTabBar *tb = m_hoverArea->tabBar();
-    if(tb->rect().contains(tb->mapFromGlobal(QCursor::pos())))
+    if(tb->rect().contains(mapFromDrag(tb, pos)))
       return AddTo;
   }
 
@@ -1565,6 +1653,50 @@ bool ToolWindowManager::eventFilter(QObject *object, QEvent *event)
       abortDrag();
     }
   }
+#if defined(RENDERDOC_WAYLAND_UI)
+  // When a QDrag is active, DnD event handlers (dragEnterEvent, etc.)
+  // manage cursor window tracking. Skip the event filter path to avoid
+  // interference from synthetic Enter/Leave events during DnD.
+  else if(!m_dndDragActive && event->type() == QEvent::Enter)
+  {
+    // Track which top-level window the cursor enters during drag.
+    QWidget *w = qobject_cast<QWidget *>(object);
+    if(w && w->isWindow() && dragInProgress())
+    {
+      // Don't track the dragged wrapper itself.
+      if(w != m_draggedWrapper)
+      {
+        m_dragCursorWindow = w;
+        reparentOverlays(w);
+      }
+    }
+  }
+  else if(!m_dndDragActive && event->type() == QEvent::Leave)
+  {
+    QWidget *w = qobject_cast<QWidget *>(object);
+    if(w && w->isWindow() && w == m_dragCursorWindow && dragInProgress())
+    {
+      m_dragCursorWindow = nullptr;
+      // Reparent overlays to the main window so they have a valid parent
+      // while the cursor is between windows.
+      reparentOverlays(window());
+    }
+  }
+  else if(!m_dndDragActive && event->type() == QEvent::MouseMove && m_dragCursorWindow &&
+          dragInProgress())
+  {
+    QWidget *w = qobject_cast<QWidget *>(object);
+    if(w)
+    {
+      // Map the mouse position to the top-level cursor window's coordinate space.
+      QMouseEvent *me = static_cast<QMouseEvent *>(event);
+      if(w == m_dragCursorWindow)
+        m_dragCursorLocalPos = me->pos();
+      else if(w->window() == m_dragCursorWindow)
+        m_dragCursorLocalPos = w->mapTo(m_dragCursorWindow, me->pos());
+    }
+  }
+#endif
   return QWidget::eventFilter(object, event);
 }
 

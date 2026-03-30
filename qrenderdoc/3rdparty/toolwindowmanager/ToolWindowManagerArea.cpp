@@ -24,6 +24,10 @@
  */
 #include "ToolWindowManagerArea.h"
 #include <QApplication>
+#include <QDataStream>
+#include <QDrag>
+#include <QGuiApplication>
+#include <QMimeData>
 #include <QMouseEvent>
 #include <algorithm>
 #include "ToolWindowManager.h"
@@ -149,6 +153,7 @@ bool ToolWindowManagerArea::eventFilter(QObject *object, QEvent *event)
       {
         m_dragCanStart = true;
         m_dragCanStartPos = QCursor::pos();
+        m_dragCanStartLocalPos = pos;
       }
     }
     else if(event->type() == QEvent::MouseButtonPress && qApp->mouseButtons() == Qt::MiddleButton)
@@ -196,6 +201,27 @@ bool ToolWindowManagerArea::eventFilter(QObject *object, QEvent *event)
                             Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
         qApp->sendEvent(tabBar(), releaseEvent);
         m_manager->startDrag(QList<QWidget *>() << toolWindow, NULL);
+
+#if defined(RENDERDOC_WAYLAND_UI)
+        // On Wayland, use Qt's DnD system for cross-surface event delivery.
+        if(QGuiApplication::platformName() == QLatin1String("wayland"))
+        {
+          QDrag *drag = new QDrag(this);
+          QMimeData *mimeData = new QMimeData();
+          mimeData->setData(QStringLiteral("application/x-toolwindowmanager-drag"), QByteArray());
+          drag->setMimeData(mimeData);
+
+          m_manager->m_dndDragActive = true;
+          drag->exec(Qt::MoveAction);
+          m_manager->m_dndDragActive = false;
+
+          // Finish the drag if it wasn't already completed by a dropEvent.
+          // finishDrag handles the "no hotspot" case by creating a new
+          // floating window for tab drags.
+          if(m_manager->dragInProgress())
+            m_manager->finishDrag();
+        }
+#endif
       }
       else if(m_dragCanStart)
       {
@@ -362,7 +388,62 @@ void ToolWindowManagerArea::check_mouse_move()
         toolWindows << toolWindow;
       }
     }
-    m_manager->startDrag(toolWindows, NULL);
+
+    ToolWindowManagerWrapper *wrapper = m_manager->wrapperOf(this);
+    if(wrapper && !wrapper->floating())
+      wrapper = NULL;
+    m_manager->startDrag(toolWindows, wrapper);
+
+#if defined(RENDERDOC_WAYLAND_UI)
+    // On Wayland, all drags use Qt's DnD system to get cross-surface event
+    // delivery. The implicit pointer grab prevents Enter/Leave events from
+    // reaching other windows during a button-held drag. Wrapper drags
+    // additionally set xdg-toplevel-drag MIME types so the compositor moves
+    // the window with the cursor.
+    if(QGuiApplication::platformName() == QLatin1String("wayland"))
+    {
+      QDrag *drag = new QDrag(this);
+      QMimeData *mimeData = new QMimeData();
+
+      // Our identifier so DnD handlers know this is a toolwindow drag.
+      mimeData->setData(QStringLiteral("application/x-toolwindowmanager-drag"), QByteArray());
+
+      if(wrapper)
+      {
+        // Qt magic MIME types that trigger xdg-toplevel-drag in the Wayland backend.
+        QWindow *win = wrapper->windowHandle();
+        if(win)
+        {
+          QByteArray windowData;
+          QDataStream windowStream(&windowData, QIODevice::WriteOnly);
+          windowStream << reinterpret_cast<qintptr>(win);
+          mimeData->setData(QStringLiteral("application/x-qt-mainwindowdrag-window"), windowData);
+
+          // Offset: where the user clicked relative to the wrapper's top-left.
+          // This anchors the window to the cursor during the drag.
+          QPoint pressInWrapper = tabBar()->mapTo(wrapper, m_dragCanStartLocalPos);
+          QByteArray posData;
+          QDataStream posStream(&posData, QIODevice::WriteOnly);
+          posStream << pressInWrapper;
+          mimeData->setData(QStringLiteral("application/x-qt-mainwindowdrag-position"), posData);
+        }
+      }
+
+      drag->setMimeData(mimeData);
+
+      m_manager->m_dndDragActive = true;
+      drag->exec(Qt::MoveAction);
+      m_manager->m_dndDragActive = false;
+
+      // Finish the drag if it wasn't already completed by a dropEvent.
+      // finishDrag handles the "no hotspot" case: tab drags create a new
+      // floating window, wrapper drags stay where they are.
+      if(m_manager->dragInProgress())
+        m_manager->finishDrag();
+
+      return;
+    }
+#endif
   }
 }
 

@@ -85,7 +85,8 @@ private:
   bool m_dragCanStart;         // indicates that user has started mouse movement on QTabWidget
                                // that can be considered as dragging it if the cursor will leave
                                // its area
-  QPoint m_dragCanStartPos;    // the position the cursor was at
+  QPoint m_dragCanStartPos;         // the position the cursor was at
+  QPoint m_dragCanStartLocalPos;    // press position in tab bar local coords (for Wayland DnD offset)
 
   bool m_tabDragCanStart;    // indicates that user has started mouse movement on QTabWidget
                              // that can be considered as dragging current tab
