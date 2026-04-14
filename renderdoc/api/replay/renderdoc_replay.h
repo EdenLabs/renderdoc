@@ -2473,8 +2473,7 @@ extern "C" RENDERDOC_API int RENDERDOC_CC RENDERDOC_RunUnitTests(const rdcstr &c
                                                                  const rdcarray<rdcstr> &args);
 
 DOCUMENT("INTERNAL: Run functional tests.");
-extern "C" RENDERDOC_API int RENDERDOC_CC RENDERDOC_RunFunctionalTests(int pythonMinorVersion,
-                                                                       const rdcarray<rdcstr> &args);
+extern "C" RENDERDOC_API int RENDERDOC_CC RENDERDOC_RunFunctionalTests(const rdcarray<rdcstr> &args);
 #endif
 
 #if !defined(SWIG)
