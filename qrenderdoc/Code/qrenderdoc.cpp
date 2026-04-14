@@ -197,7 +197,7 @@ int main(int argc, char *argv[])
 #endif
 
   QGuiApplication::setHighDpiScaleFactorRoundingPolicy(
-      Qt::HighDpiScaleFactorRoundingPolicy::RoundPreferFloor);
+      Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
 
   QApplication::setApplicationVersion(lit(FULL_VERSION_STRING));
 
