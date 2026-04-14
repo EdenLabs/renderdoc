@@ -63,6 +63,10 @@ public:
   rdcpair<uint32_t, uint32_t> PickVertex(uint32_t x, uint32_t y);
   int GetDmabufFd();
   int GetDmabufStride();
+  int GetPixelContextDmabufFd();
+  int GetPixelContextDmabufStride();
+  rdcpair<int32_t, int32_t> GetPixelContextDimensions();
+  void SetPixelContextDimensions(int32_t width, int32_t height);
 
 private:
   ReplayOutput(ReplayController *parent, WindowingData window, ReplayOutputType type);

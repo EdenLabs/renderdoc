@@ -26,92 +26,46 @@
 
 #include "RenderDocRhiWidget.h"
 #include <unistd.h>
+#include <QMouseEvent>
+#include <QResizeEvent>
+#include <QWheelEvent>
 #include <rhi/qrhi.h>
 #include <rhi/qrhi_platform.h>
+#include <rhi/qshaderbaker.h>
+#include "CustomPaintWidget.h"
 
-// Fullscreen triangle vertex shader (SPIR-V).
-// Generates a fullscreen triangle from gl_VertexIndex without a vertex buffer.
-//
-// #version 450
-// layout(location = 0) out vec2 v_uv;
-// void main() {
-//     v_uv = vec2((gl_VertexIndex << 1) & 2, gl_VertexIndex & 2);
-//     gl_Position = vec4(v_uv * 2.0 - 1.0, 0.0, 1.0);
-//     v_uv.y = 1.0 - v_uv.y;
-// }
-static const uint32_t s_vertSpirv[] = {
-    0x07230203, 0x00010000, 0x000d000a, 0x00000025, 0x00000000, 0x00020011, 0x00000001, 0x0006000b,
-    0x00000001, 0x4c534c47, 0x6474732e, 0x3035342e, 0x00000000, 0x0003000e, 0x00000000, 0x00000001,
-    0x0008000f, 0x00000000, 0x00000004, 0x6e69616d, 0x00000000, 0x00000009, 0x0000000c, 0x00000019,
-    0x00030003, 0x00000002, 0x000001c2, 0x00040005, 0x00000004, 0x6e69616d, 0x00000000, 0x00040005,
-    0x00000009, 0x76755f76, 0x00000000, 0x00060005, 0x0000000c, 0x565f6c67, 0x65747265, 0x646e4978,
-    0x00007865, 0x00060005, 0x00000017, 0x505f6c67, 0x65567265, 0x78657472, 0x00000000, 0x00060006,
-    0x00000017, 0x00000000, 0x505f6c67, 0x7469736f, 0x006e6f69, 0x00070006, 0x00000017, 0x00000001,
-    0x505f6c67, 0x746e696f, 0x657a6953, 0x00000000, 0x00070006, 0x00000017, 0x00000002, 0x435f6c67,
-    0x4470696c, 0x61747369, 0x0065636e, 0x00070006, 0x00000017, 0x00000003, 0x435f6c67, 0x446c6c75,
-    0x61747369, 0x0065636e, 0x00030005, 0x00000019, 0x00000000, 0x00040047, 0x00000009, 0x0000001e,
-    0x00000000, 0x00040047, 0x0000000c, 0x0000000b, 0x0000002a, 0x00050048, 0x00000017, 0x00000000,
-    0x0000000b, 0x00000000, 0x00050048, 0x00000017, 0x00000001, 0x0000000b, 0x00000001, 0x00050048,
-    0x00000017, 0x00000002, 0x0000000b, 0x00000003, 0x00050048, 0x00000017, 0x00000003, 0x0000000b,
-    0x00000004, 0x00030047, 0x00000017, 0x00000002, 0x00020013, 0x00000002, 0x00030021, 0x00000003,
-    0x00000002, 0x00030016, 0x00000006, 0x00000020, 0x00040017, 0x00000007, 0x00000006, 0x00000002,
-    0x00040020, 0x00000008, 0x00000003, 0x00000007, 0x0004003b, 0x00000008, 0x00000009, 0x00000003,
-    0x00040015, 0x0000000a, 0x00000020, 0x00000001, 0x00040020, 0x0000000b, 0x00000001, 0x0000000a,
-    0x0004003b, 0x0000000b, 0x0000000c, 0x00000001, 0x00040015, 0x0000000d, 0x00000020, 0x00000000,
-    0x0004002b, 0x0000000a, 0x0000000e, 0x00000001, 0x0004002b, 0x0000000d, 0x00000010, 0x00000002,
-    0x00040017, 0x00000015, 0x00000006, 0x00000004, 0x0004002b, 0x0000000d, 0x00000016, 0x00000001,
-    0x0006001e, 0x00000017, 0x00000015, 0x00000006, 0x00000016, 0x00000016, 0x00040020, 0x00000018,
-    0x00000003, 0x00000017, 0x0004003b, 0x00000018, 0x00000019, 0x00000003, 0x0004002b, 0x0000000a,
-    0x0000001a, 0x00000000, 0x0004002b, 0x00000006, 0x0000001c, 0x40000000, 0x0004002b, 0x00000006,
-    0x0000001e, 0x3f800000, 0x0004002b, 0x00000006, 0x00000020, 0x00000000, 0x00040020, 0x00000023,
-    0x00000003, 0x00000015, 0x00050036, 0x00000002, 0x00000004, 0x00000000, 0x00000003, 0x000200f8,
-    0x00000005, 0x0004003d, 0x0000000a, 0x000000a0, 0x0000000c, 0x000500c4, 0x0000000a, 0x000000a1,
-    0x000000a0, 0x0000000e, 0x000500c7, 0x0000000a, 0x000000a2, 0x000000a1, 0x0000000e, 0x00040070,
-    0x00000006, 0x000000a3, 0x000000a2, 0x000500c7, 0x0000000a, 0x000000a4, 0x000000a0, 0x0000000e,
-    0x00040070, 0x00000006, 0x000000a5, 0x000000a4, 0x00050050, 0x00000007, 0x000000a6, 0x000000a3,
-    0x000000a5, 0x0003003e, 0x00000009, 0x000000a6, 0x0004003d, 0x00000007, 0x000000a7, 0x00000009,
-    0x0005008e, 0x00000007, 0x000000a8, 0x000000a7, 0x0000001c, 0x00050050, 0x00000007, 0x000000a9,
-    0x0000001e, 0x0000001e, 0x00050083, 0x00000007, 0x000000aa, 0x000000a8, 0x000000a9, 0x00050051,
-    0x00000006, 0x000000ab, 0x000000aa, 0x00000000, 0x00050051, 0x00000006, 0x000000ac, 0x000000aa,
-    0x00000001, 0x00070050, 0x00000015, 0x000000ad, 0x000000ab, 0x000000ac, 0x00000020, 0x0000001e,
-    0x00050041, 0x00000023, 0x000000ae, 0x00000019, 0x0000001a, 0x0003003e, 0x000000ae, 0x000000ad,
-    0x0004003d, 0x00000007, 0x000000af, 0x00000009, 0x00050051, 0x00000006, 0x000000b0, 0x000000af,
-    0x00000001, 0x00050083, 0x00000006, 0x000000b1, 0x0000001e, 0x000000b0, 0x00050051, 0x00000006,
-    0x000000b2, 0x000000af, 0x00000000, 0x00050050, 0x00000007, 0x000000b3, 0x000000b2, 0x000000b1,
-    0x0003003e, 0x00000009, 0x000000b3, 0x000100fd, 0x00010038,
-};
+// Fullscreen triangle vertex shader. Generates a fullscreen triangle from
+// gl_VertexIndex without a vertex buffer. Baked at runtime via QShaderBaker so
+// QRhi gets the reflection metadata it needs to build descriptor set layouts.
+static const char *s_vertGlsl =
+    "#version 440\n"
+    "layout(location = 0) out vec2 v_uv;\n"
+    "void main() {\n"
+    "    v_uv = vec2((gl_VertexIndex << 1) & 2, gl_VertexIndex & 2);\n"
+    "    gl_Position = vec4(v_uv * 2.0 - 1.0, 0.0, 1.0);\n"
+    "}\n";
 
-// Fullscreen texture sample fragment shader (SPIR-V).
-//
-// #version 450
-// layout(location = 0) in vec2 v_uv;
-// layout(location = 0) out vec4 fragColor;
-// layout(binding = 0) uniform sampler2D tex;
-// void main() {
-//     fragColor = texture(tex, v_uv);
-// }
-static const uint32_t s_fragSpirv[] = {
-    0x07230203, 0x00010000, 0x000d000a, 0x00000013, 0x00000000, 0x00020011, 0x00000001, 0x0006000b,
-    0x00000001, 0x4c534c47, 0x6474732e, 0x3035342e, 0x00000000, 0x0003000e, 0x00000000, 0x00000001,
-    0x0007000f, 0x00000004, 0x00000004, 0x6e69616d, 0x00000000, 0x00000009, 0x0000000d, 0x00030010,
-    0x00000004, 0x00000007, 0x00030003, 0x00000002, 0x000001c2, 0x00040005, 0x00000004, 0x6e69616d,
-    0x00000000, 0x00050005, 0x00000009, 0x67617266, 0x6f6c6f43, 0x00000072, 0x00030005, 0x0000000b,
-    0x00786574, 0x00040005, 0x0000000d, 0x76755f76, 0x00000000, 0x00040047, 0x00000009, 0x0000001e,
-    0x00000000, 0x00040047, 0x0000000b, 0x00000022, 0x00000000, 0x00040047, 0x0000000b, 0x00000021,
-    0x00000000, 0x00040047, 0x0000000d, 0x0000001e, 0x00000000, 0x00020013, 0x00000002, 0x00030021,
-    0x00000003, 0x00000002, 0x00030016, 0x00000006, 0x00000020, 0x00040017, 0x00000007, 0x00000006,
-    0x00000004, 0x00040020, 0x00000008, 0x00000003, 0x00000007, 0x0004003b, 0x00000008, 0x00000009,
-    0x00000003, 0x00090019, 0x0000000a, 0x00000006, 0x00000001, 0x00000000, 0x00000000, 0x00000000,
-    0x00000001, 0x00000000, 0x0003001b, 0x0000000f, 0x0000000a, 0x00040020, 0x00000010, 0x00000000,
-    0x0000000f, 0x0004003b, 0x00000010, 0x0000000b, 0x00000000, 0x00040017, 0x0000000c, 0x00000006,
-    0x00000002, 0x00040020, 0x00000011, 0x00000001, 0x0000000c, 0x0004003b, 0x00000011, 0x0000000d,
-    0x00000001, 0x00050036, 0x00000002, 0x00000004, 0x00000000, 0x00000003, 0x000200f8, 0x00000005,
-    0x0004003d, 0x0000000f, 0x00000012, 0x0000000b, 0x0004003d, 0x0000000c, 0x000000e0, 0x0000000d,
-    0x00050057, 0x00000007, 0x000000e1, 0x00000012, 0x000000e0, 0x0003003e, 0x00000009, 0x000000e1,
-    0x000100fd, 0x00010038,
-};
+// Fullscreen texture sample fragment shader. Baked at runtime via QShaderBaker.
+static const char *s_fragGlsl =
+    "#version 440\n"
+    "layout(location = 0) in vec2 v_uv;\n"
+    "layout(location = 0) out vec4 fragColor;\n"
+    "layout(binding = 0) uniform sampler2D tex;\n"
+    "void main() {\n"
+    "    fragColor = texture(tex, v_uv);\n"
+    "}\n";
 
-RenderDocRhiWidget::RenderDocRhiWidget(QWidget *parent) : QRhiWidget(parent)
+static QShader bakeShader(const char *glslSource, QShader::Stage stage)
+{
+  QShaderBaker baker;
+  baker.setSourceString(QByteArray(glslSource), stage);
+  baker.setGeneratedShaderVariants({QShader::StandardShader});
+  baker.setGeneratedShaders({{QShader::SpirvShader, QShaderVersion(100)}});
+  return baker.bake();
+}
+
+RenderDocRhiWidget::RenderDocRhiWidget(CustomPaintWidget *custom)
+    : QRhiWidget(custom), m_Custom(custom)
 {
   setApi(QRhiWidget::Api::Vulkan);
 }
@@ -133,18 +87,11 @@ void RenderDocRhiWidget::setDmabuf(int fd, uint32_t width, uint32_t height, uint
 
 void RenderDocRhiWidget::cleanupImport()
 {
-  if(m_importedImage != VK_NULL_HANDLE && m_vkDevice != VK_NULL_HANDLE)
-  {
-    PFN_vkDestroyImage pfnDestroyImage =
-        (PFN_vkDestroyImage)m_vkGetDeviceProcAddr(m_vkDevice, "vkDestroyImage");
-    PFN_vkFreeMemory pfnFreeMemory =
-        (PFN_vkFreeMemory)m_vkGetDeviceProcAddr(m_vkDevice, "vkFreeMemory");
-
-    if(pfnDestroyImage)
-      pfnDestroyImage(m_vkDevice, m_importedImage, nullptr);
-    if(pfnFreeMemory)
-      pfnFreeMemory(m_vkDevice, m_importedMem, nullptr);
-  }
+  // Qt may still have in-flight GPU work referencing m_importedImage. Defer
+  // the actual destruction by parking the resources on a retire list, then
+  // sweep the list in render() once enough frames have passed.
+  if(m_importedImage != VK_NULL_HANDLE)
+    m_RetiredImports.push_back({m_importedImage, m_importedMem, 0});
 
   m_importedImage = VK_NULL_HANDLE;
   m_importedMem = VK_NULL_HANDLE;
@@ -302,10 +249,15 @@ void RenderDocRhiWidget::importDmabuf()
     return;
   }
 
-  // Wrap the imported VkImage in a QRhiTexture.
+  // Wrap the imported VkImage in a QRhiTexture. The exporter creates the image
+  // as VK_FORMAT_R8G8B8A8_SRGB so QRhi must use a matching view format —
+  // sampling an SRGB image through a UNORM view (or vice versa) without
+  // VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT is invalid and reads zero on radv.
+  // The exporter leaves the image in VK_IMAGE_LAYOUT_GENERAL — the only layout
+  // valid for cross-device sampling without explicit ownership transfer.
   m_texture = r->newTexture(QRhiTexture::RGBA8, QSize(m_srcWidth, m_srcHeight), 1,
-                            QRhiTexture::UsedWithLoadStore);
-  if(!m_texture->createFrom({(quint64)m_importedImage, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL}))
+                            QRhiTexture::sRGB);
+  if(!m_texture->createFrom({(quint64)m_importedImage, VK_IMAGE_LAYOUT_GENERAL}))
   {
     delete m_texture;
     m_texture = nullptr;
@@ -333,6 +285,36 @@ void RenderDocRhiWidget::initialize(QRhiCommandBuffer *cb)
 
 void RenderDocRhiWidget::render(QRhiCommandBuffer *cb)
 {
+  // Sweep the retire list — destroy entries that have been retired long enough
+  // for any pending Qt frame referencing them to have completed. Bound is
+  // intentionally generous; memory cost per retired entry is one VkImage's
+  // worth of dmabuf-backed memory, well under a few MB.
+  static constexpr int kRetireFrames = 60;
+  if(!m_RetiredImports.empty() && m_vkDevice != VK_NULL_HANDLE)
+  {
+    PFN_vkDestroyImage pfnDestroyImage =
+        (PFN_vkDestroyImage)m_vkGetDeviceProcAddr(m_vkDevice, "vkDestroyImage");
+    PFN_vkFreeMemory pfnFreeMemory =
+        (PFN_vkFreeMemory)m_vkGetDeviceProcAddr(m_vkDevice, "vkFreeMemory");
+
+    for(auto it = m_RetiredImports.begin(); it != m_RetiredImports.end();)
+    {
+      it->framesAlive++;
+      if(it->framesAlive > kRetireFrames)
+      {
+        if(pfnDestroyImage)
+          pfnDestroyImage(m_vkDevice, it->img, nullptr);
+        if(pfnFreeMemory)
+          pfnFreeMemory(m_vkDevice, it->mem, nullptr);
+        it = m_RetiredImports.erase(it);
+      }
+      else
+      {
+        ++it;
+      }
+    }
+  }
+
   if(m_fd < 0)
     return;
 
@@ -359,16 +341,8 @@ void RenderDocRhiWidget::render(QRhiCommandBuffer *cb)
     m_pipeline = r->newGraphicsPipeline();
     m_pipeline->setTopology(QRhiGraphicsPipeline::Triangles);
 
-    // Build QShader wrappers for embedded SPIR-V.
-    QShader vs;
-    vs.setStage(QShader::VertexStage);
-    vs.setShader({QShader::SpirvShader, QShaderVersion(100)},
-                 QShaderCode(QByteArray((const char *)s_vertSpirv, sizeof(s_vertSpirv))));
-
-    QShader fs;
-    fs.setStage(QShader::FragmentStage);
-    fs.setShader({QShader::SpirvShader, QShaderVersion(100)},
-                 QShaderCode(QByteArray((const char *)s_fragSpirv, sizeof(s_fragSpirv))));
+    QShader vs = bakeShader(s_vertGlsl, QShader::VertexStage);
+    QShader fs = bakeShader(s_fragGlsl, QShader::FragmentStage);
 
     m_pipeline->setShaderStages({
         {QRhiShaderStage::Vertex, vs},
@@ -380,8 +354,8 @@ void RenderDocRhiWidget::render(QRhiCommandBuffer *cb)
     m_pipeline->create();
   }
 
-  // Assume the image is already in shader-read layout from the exporting device's flush.
-  m_texture->setNativeLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+  // The exporting device left the image in GENERAL after its flush.
+  m_texture->setNativeLayout(VK_IMAGE_LAYOUT_GENERAL);
 
   cb->beginPass(renderTarget(), QColor::fromRgbF(0.0f, 0.0f, 0.0f, 1.0f), {1.0f, 0});
   cb->setGraphicsPipeline(m_pipeline);
@@ -389,6 +363,40 @@ void RenderDocRhiWidget::render(QRhiCommandBuffer *cb)
   cb->setShaderResources(m_srb);
   cb->draw(3);
   cb->endPass();
+}
+
+// Mirror CustomPaintWidgetInternal's signal forwarding so the TextureViewer's
+// connections on CustomPaintWidget see input regardless of which inner widget
+// is in use.
+void RenderDocRhiWidget::mousePressEvent(QMouseEvent *e)
+{
+  emit m_Custom->clicked(e);
+}
+
+void RenderDocRhiWidget::mouseReleaseEvent(QMouseEvent *e)
+{
+  emit m_Custom->unclicked(e);
+}
+
+void RenderDocRhiWidget::mouseDoubleClickEvent(QMouseEvent *e)
+{
+  emit m_Custom->doubleClicked(e);
+}
+
+void RenderDocRhiWidget::mouseMoveEvent(QMouseEvent *e)
+{
+  emit m_Custom->mouseMove(e);
+}
+
+void RenderDocRhiWidget::wheelEvent(QWheelEvent *e)
+{
+  emit m_Custom->mouseWheel(e);
+}
+
+void RenderDocRhiWidget::resizeEvent(QResizeEvent *e)
+{
+  QRhiWidget::resizeEvent(e);
+  emit m_Custom->resize(e);
 }
 
 #endif    // RENDERDOC_WAYLAND_UI

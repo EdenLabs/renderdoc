@@ -177,6 +177,15 @@ int main(int argc, char *argv[])
   // an optimisation
   qputenv("QT_NO_SUBTRACTOPAQUESIBLINGS", lit("1").toUtf8());
 
+#if defined(RENDERDOC_WAYLAND_UI)
+  // Force Qt's widget backing store to use RHI compositing so that QRhiWidget
+  // (used by CustomPaintWidget on Wayland) can render. Without this, top-level
+  // windows are created with raster backing stores and any child QRhiWidget
+  // silently refuses to initialise its QRhi.
+  qputenv("QT_WIDGETS_RHI", lit("1").toUtf8());
+  qputenv("QT_WIDGETS_RHI_BACKEND", lit("vulkan").toUtf8());
+#endif
+
   qInfo() << "QRenderDoc initialising.";
 
   if(IsRunningAsAdmin())

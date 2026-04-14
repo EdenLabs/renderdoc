@@ -403,6 +403,33 @@ Only valid when :meth:`GetDmabufFd` returns a valid fd.
 )");
   virtual int GetDmabufStride() = 0;
 
+  DOCUMENT(R"(Like :meth:`GetDmabufFd`, but returns the fd for the pixel context
+sub-output rather than the main output. Used on Wayland so the pixel context
+widget can sample its own dmabuf rather than the main output's.
+
+:return: The dmabuf file descriptor for the pixel context output, or -1.
+:rtype: int
+)");
+  virtual int GetPixelContextDmabufFd() = 0;
+
+  DOCUMENT(R"(Row stride in bytes for the pixel context dmabuf backbuffer.
+:return: The row stride in bytes.
+:rtype: int
+)");
+  virtual int GetPixelContextDmabufStride() = 0;
+
+  DOCUMENT(R"(Current dimensions of the pixel context sub-output.
+:return: The pixel context width and height.
+:rtype: Tuple[int,int]
+)");
+  virtual rdcpair<int32_t, int32_t> GetPixelContextDimensions() = 0;
+
+  DOCUMENT(R"(Notify the pixel context sub-output of its surface dimensions.
+:param int width: The new width.
+:param int height: The new height.
+)");
+  virtual void SetPixelContextDimensions(int32_t width, int32_t height) = 0;
+
   static const uint32_t NoResult = ~0U;
 
 protected:

@@ -1832,6 +1832,25 @@ bool WrappedVulkan::Serialise_vkCreateDevice(SerialiserType &ser, VkPhysicalDevi
       RDCLOG("Enabling VK_EXT_debug_marker");
     }
 
+    // On Wayland we share the replay output backbuffer with Qt's QRhiWidget via
+    // dmabuf for zero-copy compositing. The capture's original device may not
+    // have enabled these, so opt them in here if the driver supports them.
+    if(RenderDoc::Inst().GetGlobalEnvironment().waylandDisplay != NULL)
+    {
+      auto addIfSupported = [&Extensions, &supportedExtensions](const char *name) {
+        if(supportedExtensions.find(name) == supportedExtensions.end())
+          return;
+        if(!Extensions.contains(name))
+        {
+          Extensions.push_back(name);
+          RDCLOG("Enabling %s for Wayland dmabuf export", name);
+        }
+      };
+      addIfSupported(VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME);
+      addIfSupported(VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME);
+      addIfSupported(VK_EXT_EXTERNAL_MEMORY_DMA_BUF_EXTENSION_NAME);
+    }
+
     // enable VK_AMD_SHADER_INFO_EXTENSION_NAME if it's available, to fetch shader disassembly
     if(supportedExtensions.find(VK_AMD_SHADER_INFO_EXTENSION_NAME) != supportedExtensions.end())
     {

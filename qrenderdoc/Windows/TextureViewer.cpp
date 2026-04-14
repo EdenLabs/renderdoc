@@ -813,7 +813,15 @@ void TextureViewer::RT_PickPixelsAndUpdate(IReplayController *r)
   m_CurPixelValue = pickValue;
   m_CurRealValue = realValue;
 
-  GUIInvoke::call(this, [this]() { UI_UpdateStatusText(); });
+  GUIInvoke::call(this, [this]() {
+    UI_UpdateStatusText();
+    // The pixel context's bb has been re-rendered around the new picked
+    // location. On the non-Wayland swapchain path that surfaces directly; on
+    // the Wayland dmabuf path Qt needs an explicit repaint of the
+    // pixelContext widget so the RhiWidget composites the new dmabuf
+    // contents.
+    ui->pixelContext->update();
+  });
 }
 
 void TextureViewer::RT_PickHoverAndUpdate(IReplayController *r)
@@ -2950,6 +2958,9 @@ void TextureViewer::OnCaptureLoaded()
 
     m_Output->SetPixelContext(contextData);
 
+#if defined(RENDERDOC_WAYLAND_UI)
+    ui->pixelContext->SetPixelContextMode(true);
+#endif
     ui->render->SetOutput(m_Output);
     ui->pixelContext->SetOutput(m_Output);
 

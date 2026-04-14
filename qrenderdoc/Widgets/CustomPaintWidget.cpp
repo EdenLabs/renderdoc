@@ -115,7 +115,10 @@ void CustomPaintWidget::update()
 #if defined(RENDERDOC_WAYLAND_UI)
   if(m_RhiWidget)
   {
-    m_RhiWidget->update();
+    // Schedule our own paintEvent — it triggers renderInternal(), which
+    // AsyncInvokes Display() and (on completion) updates the RhiWidget with
+    // the new dmabuf contents. Going through paintEvent lets Qt coalesce
+    // multiple update() calls per frame down to one render.
     QWidget::update();
     return;
   }
@@ -141,8 +144,15 @@ WindowingData CustomPaintWidget::GetWidgetWindowingData()
 #if defined(RENDERDOC_WAYLAND_UI)
   // On Wayland, use headless output with dmabuf export instead of a
   // wl_surface to avoid creating native child widgets (subsurfaces).
+  // Allocate the bb at the widget's *physical* pixel size — the texture
+  // viewer's fit/zoom/click math is all in physical pixels (it multiplies
+  // logical mouse coords by devicePixelRatioF), so bb dims must match or
+  // content over/underflows the bb on fractional-scaled displays.
   if(useRhiWidget())
-    return CreateHeadlessWindowingData(width(), height());
+  {
+    const qreal dpr = devicePixelRatioF();
+    return CreateHeadlessWindowingData((int)(width() * dpr), (int)(height() * dpr));
+  }
 #endif
 
   // switch to rendering here and recreate the widget, so we have an updated winId for the windowing
@@ -158,12 +168,15 @@ void CustomPaintWidget::SetOutput(IReplayOutput *out)
   RecreateInternalWidget();
 
 #if defined(RENDERDOC_WAYLAND_UI)
-  // Feed the dmabuf fd to the RhiWidget after the output is created.
+  // Feed the dmabuf fd to the RhiWidget after the output is created. Each
+  // widget samples its own sub-output's dmabuf (main vs pixel context) — the
+  // two outputs live inside a single ReplayOutput but have distinct bbs.
   if(m_RhiWidget && m_Output)
   {
-    int fd = m_Output->GetDmabufFd();
-    int stride = m_Output->GetDmabufStride();
-    auto dims = m_Output->GetDimensions();
+    int fd = m_PixelContextMode ? m_Output->GetPixelContextDmabufFd() : m_Output->GetDmabufFd();
+    int stride = m_PixelContextMode ? m_Output->GetPixelContextDmabufStride()
+                                    : m_Output->GetDmabufStride();
+    auto dims = m_PixelContextMode ? m_Output->GetPixelContextDimensions() : m_Output->GetDimensions();
     if(fd >= 0)
       m_RhiWidget->setDmabuf(fd, (uint32_t)dims.first, (uint32_t)dims.second, (uint32_t)stride);
   }
@@ -228,9 +241,20 @@ void CustomPaintWidget::resizeEvent(QResizeEvent *e)
 {
 #if defined(RENDERDOC_WAYLAND_UI)
   // For the RhiWidget path, push dimensions from the parent widget's
-  // resize event since there's no CustomPaintWidgetInternal to do it.
+  // resize event since there's no CustomPaintWidgetInternal to do it. Route
+  // to main vs pixel-context sub-output depending on this widget's role,
+  // and pass *physical* pixels (logical * dpr) to match the texture
+  // viewer's coordinate space — see GetWidgetWindowingData.
   if(m_RhiWidget && m_Output)
-    m_Output->SetDimensions(e->size().width(), e->size().height());
+  {
+    const qreal dpr = devicePixelRatioF();
+    const int w = (int)(e->size().width() * dpr);
+    const int h = (int)(e->size().height() * dpr);
+    if(m_PixelContextMode)
+      m_Output->SetPixelContextDimensions(w, h);
+    else
+      m_Output->SetDimensions(w, h);
+  }
 #endif
 
   QWidget::resizeEvent(e);
@@ -258,12 +282,16 @@ void CustomPaintWidget::renderInternal(QPaintEvent *e)
 
 #if defined(RENDERDOC_WAYLAND_UI)
         // After rendering completes, tell the RhiWidget to repaint with the
-        // new dmabuf contents.
+        // new dmabuf contents — pulling from the right sub-output.
         if(me->m_RhiWidget)
         {
-          int fd = me->m_Output->GetDmabufFd();
-          int stride = me->m_Output->GetDmabufStride();
-          auto dims = me->m_Output->GetDimensions();
+          const bool pixelContext = me->m_PixelContextMode;
+          int fd = pixelContext ? me->m_Output->GetPixelContextDmabufFd()
+                                : me->m_Output->GetDmabufFd();
+          int stride = pixelContext ? me->m_Output->GetPixelContextDmabufStride()
+                                    : me->m_Output->GetDmabufStride();
+          auto dims = pixelContext ? me->m_Output->GetPixelContextDimensions()
+                                   : me->m_Output->GetDimensions();
           GUIInvoke::call(me, [me, fd, stride, dims]() {
             if(me && me->m_RhiWidget && fd >= 0)
               me->m_RhiWidget->setDmabuf(fd, (uint32_t)dims.first, (uint32_t)dims.second,
@@ -352,6 +380,17 @@ void CustomPaintWidget::keyReleaseEvent(QKeyEvent *e)
 
 void CustomPaintWidget::paintEvent(QPaintEvent *e)
 {
+#if defined(RENDERDOC_WAYLAND_UI)
+  // On Wayland the replay output is a dmabuf-exported VkImage that the
+  // RhiWidget composites. paintEvent here drives the replay-thread Display()
+  // — paint events are naturally coalesced by Qt, so this throttles render
+  // work to ~one per frame regardless of how many update() calls happen.
+  if(m_RhiWidget)
+  {
+    renderInternal(e);
+    return;
+  }
+#endif
   // don't paint this widget
 }
 

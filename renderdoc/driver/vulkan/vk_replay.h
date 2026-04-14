@@ -629,6 +629,13 @@ private:
     uint32_t dmabufStride   = 0;
     uint64_t dmabufModifier = 0;
 
+    // Debounce state for recreating bb on resize. SetOutputWindowDimensions
+    // updates pendingWidth/Height continuously during drag-resize; we only
+    // actually recreate once the pending size has held steady for enough
+    // consecutive CheckResize calls for any in-flight Qt GPU work to drain.
+    int32_t lastSeenPendingWidth = 0, lastSeenPendingHeight = 0;
+    int32_t pendingStableFrames = 0;
+
     VulkanResourceManager *GetResourceManager() { return m_ResourceManager; }
     VulkanResourceManager *m_ResourceManager;
   };

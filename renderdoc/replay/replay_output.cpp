@@ -1132,3 +1132,25 @@ int ReplayOutput::GetDmabufStride()
 {
   return m_pDevice->GetOutputWindowDmabufStride(m_MainOutput.outputID);
 }
+
+int ReplayOutput::GetPixelContextDmabufFd()
+{
+  return m_pDevice->GetOutputWindowDmabufFd(m_PixelContext.outputID);
+}
+
+int ReplayOutput::GetPixelContextDmabufStride()
+{
+  return m_pDevice->GetOutputWindowDmabufStride(m_PixelContext.outputID);
+}
+
+rdcpair<int32_t, int32_t> ReplayOutput::GetPixelContextDimensions()
+{
+  int32_t w = 0, h = 0;
+  m_pDevice->GetOutputWindowDimensions(m_PixelContext.outputID, w, h);
+  return {w, h};
+}
+
+void ReplayOutput::SetPixelContextDimensions(int32_t width, int32_t height)
+{
+  m_pDevice->SetOutputWindowDimensions(m_PixelContext.outputID, width, height);
+}

@@ -85,6 +85,14 @@ public:
   WindowingData GetWidgetWindowingData();
   void SetOutput(IReplayOutput *out);
   void SetBackCol(QColor col) { m_BackCol = col; }
+
+#if defined(RENDERDOC_WAYLAND_UI)
+  // Marks this widget as the pixel-context view rather than the main output.
+  // Both widgets share one IReplayOutput but each sub-output (main vs pixel
+  // context) has its own dmabuf fd/dimensions; this tells the widget which
+  // set of per-output methods to call.
+  void SetPixelContextMode(bool pixelContext) { m_PixelContextMode = pixelContext; }
+#endif
 signals:
   void clicked(QMouseEvent *e);
   void unclicked(QMouseEvent *e);
@@ -104,11 +112,15 @@ private:
 
   QPaintEngine *paintEngine() const override { return NULL; }
   friend class CustomPaintWidgetInternal;
+#if defined(RENDERDOC_WAYLAND_UI)
+  friend class RenderDocRhiWidget;
+#endif
 
   CustomPaintWidgetInternal *m_Internal = NULL;
 
 #if defined(RENDERDOC_WAYLAND_UI)
   RenderDocRhiWidget *m_RhiWidget = NULL;
+  bool m_PixelContextMode = false;
   bool useRhiWidget() const;
 #endif
 

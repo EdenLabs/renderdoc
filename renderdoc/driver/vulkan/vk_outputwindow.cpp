@@ -510,9 +510,26 @@ void VulkanReplay::OutputWindow::Create(WrappedVulkan *driver, VkDevice device, 
 
     // create resolve target, since it must precisely match the pre-resolve format, it doesn't allow
     // any format conversion.
+    //
+    // For the dmabuf export path, bb is multisampled and therefore can't be
+    // linear-tiled (no driver supports linear-tiled MSAA). Make resolveimg the
+    // dmabuf-exported image instead: bb renders MSAA in optimal tiling, we
+    // resolve bb -> resolveimg before flush in FlipOutputWindow, and Qt imports
+    // resolveimg.
+    VkExternalMemoryImageCreateInfo extMemResolveInfo = {
+        VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+        NULL,
+        VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
+    };
     imInfo.samples = VK_SAMPLE_COUNT_1_BIT;
     imInfo.format = imformat;
     imInfo.usage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    if(dmabufExport)
+    {
+      imInfo.pNext = &extMemResolveInfo;
+      imInfo.tiling = VK_IMAGE_TILING_LINEAR;
+      imInfo.usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
+    }
 
     vkr = vt->CreateImage(Unwrap(device), &imInfo, NULL, &resolveimg);
     CHECK_VKR(driver, vkr);
@@ -523,6 +540,12 @@ void VulkanReplay::OutputWindow::Create(WrappedVulkan *driver, VkDevice device, 
 
     vt->GetImageMemoryRequirements(Unwrap(device), Unwrap(resolveimg), &mrq);
 
+    VkExportMemoryAllocateInfo exportResolveInfo = {
+        VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
+        NULL,
+        VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
+    };
+    allocInfo.pNext = dmabufExport ? &exportResolveInfo : NULL;
     allocInfo.allocationSize = mrq.size;
     allocInfo.memoryTypeIndex = driver->GetGPULocalMemoryIndex(mrq.memoryTypeBits);
 
@@ -536,6 +559,34 @@ void VulkanReplay::OutputWindow::Create(WrappedVulkan *driver, VkDevice device, 
 
     vkr = vt->BindImageMemory(Unwrap(device), Unwrap(resolveimg), Unwrap(resolvemem), 0);
     CHECK_VKR(driver, vkr);
+
+    // Export resolveimg's memory as a dmabuf. bb can't be exported (MSAA), so
+    // the displayable single-sample resolve is what Qt samples from.
+    if(dmabufExport)
+    {
+      VkMemoryGetFdInfoKHR getFdInfo = {
+          VK_STRUCTURE_TYPE_MEMORY_GET_FD_INFO_KHR,
+          NULL,
+          Unwrap(resolvemem),
+          VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
+      };
+      PFN_vkGetMemoryFdKHR getMemFd =
+          (PFN_vkGetMemoryFdKHR)vt->GetDeviceProcAddr(Unwrap(device), "vkGetMemoryFdKHR");
+      if(getMemFd)
+      {
+        vkr = getMemFd(Unwrap(device), &getFdInfo, &dmabufFd);
+        CHECK_VKR(driver, vkr);
+      }
+
+      VkImageSubresource subRes = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0};
+      VkSubresourceLayout layout = {};
+      vt->GetImageSubresourceLayout(Unwrap(device), Unwrap(resolveimg), &subRes, &layout);
+      dmabufStride = (uint32_t)layout.rowPitch;
+
+      // Restore imInfo so the bb block below doesn't pick up resolveimg's flags.
+      imInfo.pNext = NULL;
+      imInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    }
   }
 
   {
@@ -593,9 +644,12 @@ void VulkanReplay::OutputWindow::Create(WrappedVulkan *driver, VkDevice device, 
   }
 
   {
-    // When exporting via dmabuf, use linear tiling so the image is
-    // universally importable by Qt's Vulkan device. Otherwise use
-    // optimal tiling for best GPU performance.
+    // When exporting via dmabuf, use linear tiling so the image is universally
+    // importable by Qt's Vulkan device. For the MSAA (depth) path, bb stays
+    // optimal-tiled non-exported and we export resolveimg instead (see above)
+    // since no driver supports linear-tiled MSAA.
+    const bool bbDmabufExport = dmabufExport && !depth;
+
     VkExternalMemoryImageCreateInfo extMemImInfo = {
         VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
         NULL,
@@ -604,7 +658,7 @@ void VulkanReplay::OutputWindow::Create(WrappedVulkan *driver, VkDevice device, 
 
     VkImageCreateInfo imInfo = {
         VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-        dmabufExport ? &extMemImInfo : NULL,
+        bbDmabufExport ? &extMemImInfo : NULL,
         0,
         VK_IMAGE_TYPE_2D,
         imformat,
@@ -612,10 +666,10 @@ void VulkanReplay::OutputWindow::Create(WrappedVulkan *driver, VkDevice device, 
         1,
         1,
         depth ? VULKAN_MESH_VIEW_SAMPLES : VK_SAMPLE_COUNT_1_BIT,
-        dmabufExport ? VK_IMAGE_TILING_LINEAR : VK_IMAGE_TILING_OPTIMAL,
+        bbDmabufExport ? VK_IMAGE_TILING_LINEAR : VK_IMAGE_TILING_OPTIMAL,
         VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-            (dmabufExport ? (VkImageUsageFlags)VK_IMAGE_USAGE_SAMPLED_BIT : (VkImageUsageFlags)0),
+            (bbDmabufExport ? (VkImageUsageFlags)VK_IMAGE_USAGE_SAMPLED_BIT : (VkImageUsageFlags)0),
         VK_SHARING_MODE_EXCLUSIVE,
         0,
         NULL,
@@ -641,7 +695,7 @@ void VulkanReplay::OutputWindow::Create(WrappedVulkan *driver, VkDevice device, 
 
     VkMemoryAllocateInfo allocInfo = {
         VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-        dmabufExport ? &exportInfo : NULL,
+        bbDmabufExport ? &exportInfo : NULL,
         mrq.size,
         driver->GetGPULocalMemoryIndex(mrq.memoryTypeBits),
     };
@@ -657,8 +711,9 @@ void VulkanReplay::OutputWindow::Create(WrappedVulkan *driver, VkDevice device, 
     vkr = vt->BindImageMemory(Unwrap(device), Unwrap(bb), Unwrap(bbmem), 0);
     CHECK_VKR(driver, vkr);
 
-    // Export the bb memory as a dmabuf fd for sharing with Qt.
-    if(dmabufExport)
+    // Export the bb memory as a dmabuf fd for sharing with Qt. MSAA path has
+    // already populated dmabufFd from resolveimg above.
+    if(bbDmabufExport)
     {
       VkMemoryGetFdInfoKHR getFdInfo = {
           VK_STRUCTURE_TYPE_MEMORY_GET_FD_INFO_KHR,
@@ -941,6 +996,45 @@ bool VulkanReplay::CheckResizeOutputWindow(uint64_t id)
     return false;
 
   OutputWindow &outw = m_OutputWindows[id];
+
+  // Headless dmabuf path: bb's initial size tracks the widget at output-
+  // creation time, which is typically before layout has settled. Recreate
+  // the bb once the pending size (pushed via SetOutputWindowDimensions from
+  // resizeEvent) has held steady for a while — live-resize doesn't stabilise
+  // so the bb survives drag intact, but initial layout and user-final
+  // resizes do trigger a recreate. A stability threshold in the hundreds of
+  // ms also gives any in-flight Qt GPU work time to drain before we tear
+  // down the old bb's memory, avoiding the GPUVM faults that otherwise
+  // appear on radv.
+  if(outw.m_WindowSystem == WindowingSystem::Headless && outw.dmabufExport)
+  {
+    constexpr int32_t kStableFramesBeforeResize = 30;
+
+    if(outw.pendingWidth == outw.lastSeenPendingWidth &&
+       outw.pendingHeight == outw.lastSeenPendingHeight)
+    {
+      outw.pendingStableFrames++;
+    }
+    else
+    {
+      outw.lastSeenPendingWidth = outw.pendingWidth;
+      outw.lastSeenPendingHeight = outw.pendingHeight;
+      outw.pendingStableFrames = 0;
+    }
+
+    if(outw.pendingStableFrames >= kStableFramesBeforeResize && outw.pendingWidth > 0 &&
+       outw.pendingHeight > 0 &&
+       ((uint32_t)outw.pendingWidth != outw.width ||
+        (uint32_t)outw.pendingHeight != outw.height))
+    {
+      outw.width = outw.pendingWidth;
+      outw.height = outw.pendingHeight;
+      outw.pendingStableFrames = 0;
+      outw.Create(m_pDriver, m_pDriver->GetDev(), outw.hasDepth);
+      return true;
+    }
+    return false;
+  }
 
   if(outw.m_WindowSystem == WindowingSystem::Unknown ||
      outw.m_WindowSystem == WindowingSystem::Headless)
@@ -1241,10 +1335,91 @@ void VulkanReplay::FlipOutputWindow(uint64_t id)
 
   OutputWindow &outw = it->second;
 
-  // Dmabuf export outputs have no swapchain. Flush pending GPU work so the
-  // dmabuf contents are available for the importing device to read.
+  // Dmabuf export outputs have no swapchain. Transition the exported image
+  // into VK_IMAGE_LAYOUT_GENERAL (always-valid for cross-device sampling) and
+  // flush so Qt's import can read the new frame.
+  //
+  // Layout is per-device state; even though we leave the image in GENERAL
+  // here, Qt's device has its own layout tracking for its imported VkImage.
+  // GENERAL is the layout we declare on both sides — see RenderDocRhiWidget.
   if(outw.dmabufExport)
   {
+    VkDevice dev = m_pDriver->GetDev();
+    VkCommandBuffer cmd = m_pDriver->GetNextCmd();
+    const VkDevDispatchTable *vt = ObjDisp(dev);
+
+    if(cmd != VK_NULL_HANDLE)
+    {
+      VkCommandBufferBeginInfo beginInfo = {VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, NULL,
+                                            VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT};
+      VkResult vkr = vt->BeginCommandBuffer(Unwrap(cmd), &beginInfo);
+      CHECK_VKR(m_pDriver, vkr);
+
+      if(outw.dsimg != VK_NULL_HANDLE)
+      {
+        // MSAA path: bb is multisampled/optimal-tiled, resolveimg is the
+        // exported image. Resolve bb -> resolveimg, leave resolveimg in GENERAL.
+
+        // bb: COLOR_ATTACHMENT_OPTIMAL -> TRANSFER_SRC_OPTIMAL
+        outw.bbBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        outw.bbBarrier.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        outw.bbBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        DoPipelineBarrier(cmd, 1, &outw.bbBarrier);
+
+        // resolveimg: discard previous contents, -> TRANSFER_DST_OPTIMAL
+        VkImageMemoryBarrier resolveBarrier = {
+            VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+            NULL,
+            0,
+            VK_ACCESS_TRANSFER_WRITE_BIT,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_QUEUE_FAMILY_IGNORED,
+            VK_QUEUE_FAMILY_IGNORED,
+            Unwrap(outw.resolveimg),
+            {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}};
+        DoPipelineBarrier(cmd, 1, &resolveBarrier);
+
+        VkImageResolve resolve = {
+            {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1}, {0, 0, 0},
+            {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1}, {0, 0, 0},
+            {outw.width, outw.height, 1},
+        };
+        vt->CmdResolveImage(Unwrap(cmd), Unwrap(outw.bb), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                            Unwrap(outw.resolveimg), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
+                            &resolve);
+
+        // resolveimg: TRANSFER_DST_OPTIMAL -> GENERAL for foreign sampling.
+        resolveBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        resolveBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        resolveBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        resolveBarrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        DoPipelineBarrier(cmd, 1, &resolveBarrier);
+
+        // bb: TRANSFER_SRC_OPTIMAL -> COLOR_ATTACHMENT_OPTIMAL for next frame.
+        outw.bbBarrier.oldLayout = outw.bbBarrier.newLayout;
+        outw.bbBarrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        outw.bbBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        outw.bbBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        DoPipelineBarrier(cmd, 1, &outw.bbBarrier);
+        outw.bbBarrier.oldLayout = outw.bbBarrier.newLayout;
+      }
+      else
+      {
+        // Texture path: bb is the exported image. Transition to GENERAL so Qt
+        // can sample it. Bind() at the start of the next frame transitions
+        // back to COLOR_ATTACHMENT_OPTIMAL via the existing bbBarrier flow.
+        outw.bbBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        outw.bbBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        outw.bbBarrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        DoPipelineBarrier(cmd, 1, &outw.bbBarrier);
+        outw.bbBarrier.oldLayout = outw.bbBarrier.newLayout;
+        outw.bbBarrier.srcAccessMask = outw.bbBarrier.dstAccessMask;
+      }
+
+      vt->EndCommandBuffer(Unwrap(cmd));
+    }
+
     m_pDriver->SubmitCmds();
     m_pDriver->FlushQ();
     return;

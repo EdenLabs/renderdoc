@@ -26,21 +26,26 @@
 
 #if defined(RENDERDOC_WAYLAND_UI)
 
+#include <vector>
 #include <QRhiWidget>
 #include <vulkan/vulkan.h>
 #include <rhi/qrhi.h>
+
+class CustomPaintWidget;
 
 // Displays a dmabuf-backed VkImage exported by RenderDoc's replay driver.
 //
 // Replaces CustomPaintWidgetInternal + WA_PaintOnScreen on Wayland to avoid
 // creating wl_subsurfaces. The widget renders a fullscreen textured quad
-// sampling from the imported dmabuf image.
+// sampling from the imported dmabuf image. Input events are forwarded to the
+// owning CustomPaintWidget's signals so callers see the same signal flow as
+// the non-Wayland CustomPaintWidgetInternal path.
 class RenderDocRhiWidget : public QRhiWidget
 {
   Q_OBJECT
 
 public:
-  explicit RenderDocRhiWidget(QWidget *parent = nullptr);
+  explicit RenderDocRhiWidget(CustomPaintWidget *custom);
   ~RenderDocRhiWidget();
 
   // Update the dmabuf source. Called after IReplayOutput::Display() completes.
@@ -51,9 +56,18 @@ protected:
   void initialize(QRhiCommandBuffer *cb) override;
   void render(QRhiCommandBuffer *cb) override;
 
+  void mousePressEvent(QMouseEvent *e) override;
+  void mouseReleaseEvent(QMouseEvent *e) override;
+  void mouseDoubleClickEvent(QMouseEvent *e) override;
+  void mouseMoveEvent(QMouseEvent *e) override;
+  void wheelEvent(QWheelEvent *e) override;
+  void resizeEvent(QResizeEvent *e) override;
+
 private:
   void importDmabuf();
   void cleanupImport();
+
+  CustomPaintWidget *m_Custom;
 
   // Dmabuf source parameters.
   int m_fd          = -1;
@@ -71,6 +85,19 @@ private:
   PFN_vkGetDeviceProcAddr m_vkGetDeviceProcAddr = nullptr;
   VkImage m_importedImage                     = VK_NULL_HANDLE;
   VkDeviceMemory m_importedMem                 = VK_NULL_HANDLE;
+
+  // Deferred destruction of old imports. Qt's command buffers may still
+  // reference the previous VkImage/Memory after we've moved on to a new fd
+  // (e.g. after a resize); destroying immediately produces GPUVM faults, and
+  // vkDeviceWaitIdle stalls the desktop compositor (Qt shares the device).
+  // Hold each retired pair for a few frames before destroying.
+  struct RetiredImport
+  {
+    VkImage img;
+    VkDeviceMemory mem;
+    int framesAlive;
+  };
+  std::vector<RetiredImport> m_RetiredImports;
 
   // QRhi resources for the fullscreen quad.
   QRhiTexture *m_texture           = nullptr;
