@@ -45,14 +45,25 @@ static const char *s_vertGlsl =
     "    gl_Position = vec4(v_uv * 2.0 - 1.0, 0.0, 1.0);\n"
     "}\n";
 
-// Fullscreen texture sample fragment shader. Baked at runtime via QShaderBaker.
+// Fullscreen texture sample fragment shader. Samples the sRGB-format source
+// (sampler does sRGB->linear), then re-encodes to sRGB before output. Qt's
+// QRhiWidget render target is UNORM and Qt treats the resulting bytes as
+// sRGB-encoded for compositing — without manual encoding we'd display linear
+// values as if they were sRGB, producing the characteristic darkening.
 static const char *s_fragGlsl =
     "#version 440\n"
     "layout(location = 0) in vec2 v_uv;\n"
     "layout(location = 0) out vec4 fragColor;\n"
     "layout(binding = 0) uniform sampler2D tex;\n"
+    "vec3 linearToSrgb(vec3 c) {\n"
+    "    bvec3 cutoff = lessThan(c, vec3(0.0031308));\n"
+    "    vec3 hi = 1.055 * pow(c, vec3(1.0/2.4)) - 0.055;\n"
+    "    vec3 lo = c * 12.92;\n"
+    "    return mix(hi, lo, vec3(cutoff));\n"
+    "}\n"
     "void main() {\n"
-    "    fragColor = texture(tex, v_uv);\n"
+    "    vec4 s = texture(tex, v_uv);\n"
+    "    fragColor = vec4(linearToSrgb(s.rgb), s.a);\n"
     "}\n";
 
 static QShader bakeShader(const char *glslSource, QShader::Stage stage)
@@ -68,6 +79,10 @@ RenderDocRhiWidget::RenderDocRhiWidget(CustomPaintWidget *custom)
     : QRhiWidget(custom), m_Custom(custom)
 {
   setApi(QRhiWidget::Api::Vulkan);
+  // StrongFocus so click+tab can focus this widget — the mesh viewer's flycam
+  // (WASD) requires keyPressEvent delivery, and Qt only delivers keys to the
+  // currently focused widget.
+  setFocusPolicy(Qt::StrongFocus);
 }
 
 RenderDocRhiWidget::~RenderDocRhiWidget()
@@ -397,6 +412,16 @@ void RenderDocRhiWidget::resizeEvent(QResizeEvent *e)
 {
   QRhiWidget::resizeEvent(e);
   emit m_Custom->resize(e);
+}
+
+void RenderDocRhiWidget::keyPressEvent(QKeyEvent *e)
+{
+  emit m_Custom->keyPress(e);
+}
+
+void RenderDocRhiWidget::keyReleaseEvent(QKeyEvent *e)
+{
+  emit m_Custom->keyRelease(e);
 }
 
 #endif    // RENDERDOC_WAYLAND_UI

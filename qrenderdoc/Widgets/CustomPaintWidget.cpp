@@ -209,12 +209,19 @@ void CustomPaintWidget::RecreateInternalWidget()
         m_RhiWidget = new RenderDocRhiWidget(this);
         m_RhiWidget->setMouseTracking(true);
         layout()->addWidget(m_RhiWidget);
+
+        // Forward focus from this parent to the RhiWidget so callers like
+        // BufferViewer's ui->render->setFocus() actually focus the child that
+        // receives key events (mesh viewer flycam relies on this).
+        setFocusProxy(m_RhiWidget);
       }
     }
     else
     {
       if(m_RhiWidget || m_Internal == NULL)
       {
+        setFocusProxy(nullptr);
+
         delete m_RhiWidget;
         m_RhiWidget = NULL;
 
