@@ -179,21 +179,87 @@ inline void get_return(const char *funcname, PyObject *result, PyObject *global_
 
 struct PyObjectRefCounter
 {
-  PyObjectRefCounter(PyObject *o) : obj(o) { Py_INCREF(obj); }
-  PyObjectRefCounter(const PyObjectRefCounter &o) { obj = Py_NewRef(o.obj); }
-  ~PyObjectRefCounter()
+  // The previous design called Py_INCREF in the copy ctor and the GIL-checked
+  // Py_DECREF/QueueDecRef in the dtor. That was unsafe: copies happen inside
+  // Py_BEGIN_ALLOW_THREADS regions (e.g. ReplayManager::BlockInvoke takes the
+  // InvokeCallback by value and InvokeHandle then copies it again), so the
+  // copy ctor's Py_INCREF mutated ob_refcnt with no GIL. Two threads racing
+  // on ob_refcnt corrupts it, the object eventually gets one too many DECREFs,
+  // its tuple-freelist slot becomes a dangling pointer, and a later
+  // _PyTuple_FromStackRefStealOnSuccess (or _PyCode_ConstantKey, etc.) faults.
+  //
+  // Fix: only the very first construction touches Py_INCREF and the very
+  // last destruction touches Py_DECREF. Copies/moves only bump an atomic
+  // shared count, never Python state, so they're safe regardless of GIL.
+
+  // Caller must hold the GIL when constructing from a raw PyObject*.
+  PyObjectRefCounter(PyObject *o) : obj(o), refs(new std::atomic<int>(1))
   {
-    // it may not be safe at the point this is destroyed to decref the object. For example if a
-    // python lambda is passed into a C++ invoke function, we will be holding the only reference to
-    // that lambda here when the async invoke completes and destroyed the std::function wrapping it.
-    // Without python executing we can't decref it to 0. Instead we queue the decref, and it will be
-    // done as soon as safely possible.
-    if(PyGILState_Check() == 0)
-      QueueDecRef(obj);
-    else
-      Py_DECREF(obj);
+    Py_INCREF(obj);
   }
+
+  PyObjectRefCounter(const PyObjectRefCounter &o) : obj(o.obj), refs(o.refs)
+  {
+    refs->fetch_add(1, std::memory_order_relaxed);
+  }
+
+  PyObjectRefCounter(PyObjectRefCounter &&o) noexcept : obj(o.obj), refs(o.refs)
+  {
+    o.obj = NULL;
+    o.refs = NULL;
+  }
+
+  PyObjectRefCounter &operator=(const PyObjectRefCounter &o)
+  {
+    if(this != &o)
+    {
+      release();
+      obj = o.obj;
+      refs = o.refs;
+      if(refs)
+        refs->fetch_add(1, std::memory_order_relaxed);
+    }
+    return *this;
+  }
+
+  PyObjectRefCounter &operator=(PyObjectRefCounter &&o) noexcept
+  {
+    if(this != &o)
+    {
+      release();
+      obj = o.obj;
+      refs = o.refs;
+      o.obj = NULL;
+      o.refs = NULL;
+    }
+    return *this;
+  }
+
+  ~PyObjectRefCounter() { release(); }
+
   PyObject *obj;
+
+private:
+  std::atomic<int> *refs;
+
+  void release()
+  {
+    if(!refs)
+      return;
+    if(refs->fetch_sub(1, std::memory_order_acq_rel) == 1)
+    {
+      // Last shared owner. We may not hold the GIL -- e.g. an async lambda
+      // returns and the std::function wrapping it is destroyed on the replay
+      // thread. Queue the decref for the next GIL-holding flush.
+      if(PyGILState_Check())
+        Py_DECREF(obj);
+      else
+        QueueDecRef(obj);
+      delete refs;
+    }
+    obj = NULL;
+    refs = NULL;
+  }
 };
 
 template <typename rettype, typename... paramTypes>
