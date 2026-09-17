@@ -37,6 +37,12 @@ DEFINES += QT_NO_DEPRECATED_WARNINGS
 # HA HA good joke, QT_NO_DEPRECATED_WARNINGS only covers SOME warnings, not all
 QMAKE_CXXFLAGS += -Wno-deprecated-declarations
 
+# GCC 16 added -Wsfinae-incomplete, which fires inside Qt 6.11's own
+# headers (qbitarray.h defining QBitArray after a SFINAE probe) and is
+# fatal under -Werror. Nothing we can fix on our side; older GCC and
+# clang ignore the unknown -Wno- flag.
+QMAKE_CXXFLAGS += -Wno-sfinae-incomplete
+
 # Different output folders per platform
 win32 {
 
